@@ -96,9 +96,9 @@ urlpatterns = [
     #===============================================
     # Dashbord
     #=============================================
-    path('api/dashboard/summary/', views.DashboardSummaryView.as_view(), name='dashboard-summary'),
-    path('api/dashboard/chart/', views.DashboardChartView.as_view(), name='dashboard-chart'),
-    path('api/dashboard/recent/', views.DashboardRecentTransactionsView.as_view(), name='dashboard-recent'),
+    path('dashboard/summary/', views.DashboardSummaryView.as_view(), name='dashboard-summary'),
+    path('dashboard/chart/', views.DashboardChartView.as_view(), name='dashboard-chart'),
+    path('dashboard/recent/', views.DashboardRecentTransactionsView.as_view(), name='dashboard-recent'),
 ]
 
 

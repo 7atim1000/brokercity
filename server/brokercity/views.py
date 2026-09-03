@@ -16,6 +16,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from datetime import timedelta, datetime
+from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
+from decimal import Decimal
+
 
 from .serializers import (
     UserSerializer,
@@ -978,7 +981,7 @@ class DashboardSummaryView(APIView):
             except ValueError:
                 days = 30
                 
-            end_date = timezone.now()
+            end_date = timezone.now().date()  # Use date, not datetime
             start_date = end_date - timedelta(days=days)
             
             # Get all transactions in date range
@@ -990,11 +993,11 @@ class DashboardSummaryView(APIView):
             # Calculate totals
             total_deposits = transactions.filter(type='deposit').aggregate(
                 total=Sum('amount')
-            )['total'] or 0
+            )['total'] or Decimal('0')
             
             total_withdraws = transactions.filter(type='withdraw').aggregate(
                 total=Sum('amount')
-            )['total'] or 0
+            )['total'] or Decimal('0')
             
             total_balance = total_deposits - total_withdraws
             
@@ -1003,16 +1006,15 @@ class DashboardSummaryView(APIView):
             total_transactions = transactions.count()
             
             data = {
-                'total_deposits': total_deposits,
-                'total_withdraws': total_withdraws,
-                'total_balance': total_balance,
+                'total_deposits': float(total_deposits),
+                'total_withdraws': float(total_withdraws),
+                'total_balance': float(total_balance),
                 'total_transactions': total_transactions,
                 'deposit_count': deposit_count,
                 'withdraw_count': withdraw_count,
             }
             
-            serializer = DashboardSummarySerializer(data)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(data, status=status.HTTP_200_OK)
             
         except Exception as e:
             logger.error(f"Error in DashboardSummaryView: {str(e)}")
@@ -1028,11 +1030,10 @@ class DashboardChartView(APIView):
     
     def get(self, request):
         try:
-            # Get period (daily, weekly, monthly)
+            # Get period and days
             period = request.query_params.get('period', 'daily')
-            
-            # Get date range
             days = request.query_params.get('days', 30)
+            
             try:
                 days = int(days)
             except ValueError:
@@ -1041,58 +1042,97 @@ class DashboardChartView(APIView):
             end_date = timezone.now().date()
             start_date = end_date - timedelta(days=days)
             
-            # Generate labels and data
+            # Get all transactions in date range
+            transactions = Transaction.objects.filter(
+                transaction_date__gte=start_date,
+                transaction_date__lte=end_date
+            )
+            
+            # Group by period
+            if period == 'daily':
+                # Group by date
+                deposits = transactions.filter(type='deposit').annotate(
+                    period_date=TruncDate('transaction_date')
+                ).values('period_date').annotate(
+                    total=Sum('amount')
+                ).order_by('period_date')
+                
+                withdraws = transactions.filter(type='withdraw').annotate(
+                    period_date=TruncDate('transaction_date')
+                ).values('period_date').annotate(
+                    total=Sum('amount')
+                ).order_by('period_date')
+                
+            elif period == 'weekly':
+                # Group by week
+                deposits = transactions.filter(type='deposit').annotate(
+                    period_date=TruncWeek('transaction_date')
+                ).values('period_date').annotate(
+                    total=Sum('amount')
+                ).order_by('period_date')
+                
+                withdraws = transactions.filter(type='withdraw').annotate(
+                    period_date=TruncWeek('transaction_date')
+                ).values('period_date').annotate(
+                    total=Sum('amount')
+                ).order_by('period_date')
+                
+            else:  # monthly
+                # Group by month
+                deposits = transactions.filter(type='deposit').annotate(
+                    period_date=TruncMonth('transaction_date')
+                ).values('period_date').annotate(
+                    total=Sum('amount')
+                ).order_by('period_date')
+                
+                withdraws = transactions.filter(type='withdraw').annotate(
+                    period_date=TruncMonth('transaction_date')
+                ).values('period_date').annotate(
+                    total=Sum('amount')
+                ).order_by('period_date')
+            
+            # Create dictionaries for easy lookup
+            deposits_dict = {item['period_date']: float(item['total']) for item in deposits}
+            withdraws_dict = {item['period_date']: float(item['total']) for item in withdraws}
+            
+            # Generate full date range
             labels = []
             deposits_data = []
             withdraws_data = []
             balance_data = []
             
             current_date = start_date
-            running_balance = 0
+            running_balance = 0.0
             
             while current_date <= end_date:
-                # Format label based on period
+                # Get the period key based on period
                 if period == 'daily':
+                    period_key = current_date
                     label = current_date.strftime('%Y-%m-%d')
                 elif period == 'weekly':
+                    # Get the week start date
+                    week_start = current_date - timedelta(days=current_date.weekday())
+                    period_key = week_start
                     label = f"الأسبوع {current_date.isocalendar()[1]}"
                 else:  # monthly
+                    # Get the month start date
+                    month_start = current_date.replace(day=1)
+                    period_key = month_start
                     label = current_date.strftime('%Y-%m')
                 
                 labels.append(label)
                 
-                # Get transactions for this date
-                if period == 'daily':
-                    day_transactions = Transaction.objects.filter(
-                        transaction_date__date=current_date
-                    )
-                elif period == 'weekly':
-                    week_start = current_date - timedelta(days=current_date.weekday())
-                    week_end = week_start + timedelta(days=6)
-                    day_transactions = Transaction.objects.filter(
-                        transaction_date__date__gte=week_start,
-                        transaction_date__date__lte=week_end
-                    )
-                else:  # monthly
-                    day_transactions = Transaction.objects.filter(
-                        transaction_date__year=current_date.year,
-                        transaction_date__month=current_date.month
-                    )
+                # Get data for this period
+                deposit_amount = deposits_dict.get(period_key, 0.0)
+                withdraw_amount = withdraws_dict.get(period_key, 0.0)
                 
-                daily_deposits = day_transactions.filter(type='deposit').aggregate(
-                    total=Sum('amount')
-                )['total'] or 0
+                deposits_data.append(deposit_amount)
+                withdraws_data.append(withdraw_amount)
                 
-                daily_withdraws = day_transactions.filter(type='withdraw').aggregate(
-                    total=Sum('amount')
-                )['total'] or 0
+                running_balance += deposit_amount - withdraw_amount
+                balance_data.append(running_balance)
                 
-                deposits_data.append(float(daily_deposits))
-                withdraws_data.append(float(daily_withdraws))
-                
-                running_balance += daily_deposits - daily_withdraws
-                balance_data.append(float(running_balance))
-                
+                # Move to next day
                 current_date += timedelta(days=1)
             
             data = {
@@ -1102,13 +1142,14 @@ class DashboardChartView(APIView):
                 'balance': balance_data,
             }
             
-            serializer = DashboardChartSerializer(data)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(data, status=status.HTTP_200_OK)
             
         except Exception as e:
-            logger.error(f"Error in DashboardChartView: {str(e)}")
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Error in DashboardChartView: {str(e)}\n{error_details}")
             return Response(
-                {'error': 'Failed to fetch chart data'},
+                {'error': f'Failed to fetch chart data: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

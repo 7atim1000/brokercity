@@ -41,11 +41,11 @@ function Sidebar() {
             {/* Logo / Title */}
             <div
                 className="
-                    flex items-center justify-center
+                    flex flex-col items-center justify-center
                     h-24
                     border-b border-[#e9e6e1]
                     px-2
-                    mt-10
+                    mt-15
                     bg-gradient-to-r from-[#a47d52]/5 via-transparent to-[#a47d52]/5
                 "
             >
@@ -67,6 +67,8 @@ function Sidebar() {
                         duration-300
                     "
                 />
+                <p className ='text-[#a47d52] font-extrabold'>BROKER CITY</p>
+                <p className ='text-[#a47d52] font-extrabold'>PROPERTIES</p>
             </div>
 
 

@@ -249,61 +249,156 @@ function Login() {
 
                     {!loginMode && (
 
-                        <div className="mb-6 flex flex-col sm:flex-row items-center gap-3">
+                        <div className="mb-6 flex flex-col gap-3 shadow-lg bg-[#f8f7f5] p-2 mb-12">
+  {/* Owner / Manager - Full width on md+ screens */}
+  <button
+    type="button"
+    onClick={() => handleUserLogin("manager")}
+    className="
+      w-full
+      bg-[#a47d52]
+      py-3
+      px-4
+      rounded-sm
+      transition
+      duration-200
+      cursor-pointer
+      shadow-lg
+      hover:shadow-xl
+      hover:opacity-90
+    "
+  >
+    <div className='flex flex-col md:flex-row md:items-center gap-2'>
+      <div className='flex flex-col sm:gap-35 sm:flex-row '>
+        <div className='flex items-center gap-1'>
+          <span className='font-extrabold text-sm text-white'>السيد</span>
+          <span className='text-xs text-white'>/</span>
+          <span className='font-extrabold text-lg md:text-xl text-white'>محمد أبو حمدان</span>
+        </div>
+        <span className='font-normal text-sm md:text-base text-white '>المدير العام</span>
+      </div>
+    </div>
+  </button>
 
-                            {/* Owner / Manager */}
+  {/* Other buttons grid - 2 columns on md+ screens */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <button
+      type="button"
+      onClick={() => handleUserLogin("muhsin")}
+      className="
+        w-full
+        bg-[#a47d52]
+        py-3
+        px-4
+        rounded-sm
+        transition
+        duration-200
+        cursor-pointer
+        shadow-lg
+        hover:shadow-xl
+        hover:opacity-90
+      "
+    >
+      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+        <div className='flex flex-col gap-1'>
+          <div className='flex items-center gap-1 flex-wrap'>
+            <span className='font-extrabold text-sm text-white'>السيد</span>
+            <span className='text-xs text-white'>/</span>
+            <span className='font-extrabold text-lg md:text-xl text-white'>محسن أبو خالد</span>
+          </div>
+          <span className='font-normal text-sm md:text-base text-white'>المدير الاداري</span>
+        </div>
+      </div>
+    </button>
 
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    handleUserLogin("manager")
-                                }
-                                className="
-                                    w-full
-                                    bg-[#a47d52]
-                                    py-3
-                                    px-4
-                                    rounded-sm
-                                    transition
-                                    duration-200
-                                    cursor-pointer
-                                    shadow-lg
-                                    hover:shadow-xl
-                                    hover:opacity-90
-                                "
-                            >
-                                <span className='font-extrabold text-sm text-white'>السيد</span>
-                                <span className='text-xs text-white'>/ </span>
-                                <span className='font-extrabold text-lg text-white'>المدير العام</span>
-                            </button>
+    <button
+      type="button"
+      onClick={() => handleUserLogin("ghada")}
+      className="
+        w-full
+        bg-[#a47d52]
+        py-3
+        px-4
+        rounded-sm
+        transition
+        duration-200
+        cursor-pointer
+        shadow-lg
+        hover:shadow-xl
+        hover:opacity-90
+      "
+    >
+      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+        <div className='flex flex-col gap-1'>
+          <div className='flex items-center gap-1 flex-wrap'>
+            <span className='font-extrabold text-sm text-white'>السيدة</span>
+            <span className='text-xs text-white'>/</span>
+            <span className='font-extrabold text-lg md:text-xl text-white'>غادة</span>
+          </div>
+          <span className='font-normal text-sm md:text-base text-white'>مدير شئون الموظفين</span>
+        </div>
+      </div>
+    </button>
 
-                            {/* Ghada */}
+    <button
+      type="button"
+      onClick={() => handleUserLogin("muhammed")}
+      className="
+        w-full
+        bg-[#a47d52]
+        py-3
+        px-4
+        rounded-sm
+        transition
+        duration-200
+        cursor-pointer
+        shadow-lg
+        hover:shadow-xl
+        hover:opacity-90
+      "
+    >
+      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+        <div className='flex flex-col gap-1'>
+          <div className='flex items-center gap-1 flex-wrap'>
+            <span className='font-extrabold text-sm text-white'>السيد</span>
+            <span className='text-xs text-white'>/</span>
+            <span className='font-extrabold text-lg md:text-xl text-white'>محمد</span>
+          </div>
+          <span className='font-normal text-sm md:text-base text-white'>مدير اداره التسويق</span>
+        </div>
+      </div>
+    </button>
 
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    handleUserLogin("ghada")
-                                }
-                                className="
-                                    w-full
-                                    bg-[#a47d52]
-                                    py-3
-                                    px-4
-                                    rounded-sm
-                                    transition
-                                    duration-200
-                                    cursor-pointer
-                                    shadow-lg
-                                    hover:shadow-xl
-                                    hover:opacity-90
-                                "
-                            >
-                                <span className='font-extrabold text-sm text-white'>استاذه</span>
-                                <span className='text-xs text-white'>/ </span>
-                                <span className='font-extrabold text-lg text-white'>غادة</span>
-                            </button>
-
-                        </div>
+    <button
+      type="button"
+      onClick={() => handleUserLogin("abubakr")}
+      className="
+        w-full
+        bg-[#a47d52]
+        py-3
+        px-4
+        rounded-sm
+        transition
+        duration-200
+        cursor-pointer
+        shadow-lg
+        hover:shadow-xl
+        hover:opacity-90
+      "
+    >
+      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+        <div className='flex flex-col gap-1'>
+          <div className='flex items-center gap-1 flex-wrap'>
+            <span className='font-extrabold text-sm text-white'>السيد</span>
+            <span className='text-xs text-white'>/</span>
+            <span className='font-extrabold text-lg md:text-xl text-white'>ابوبكر</span>
+          </div>
+          <span className='font-normal text-sm md:text-base text-white'>المستشار القانوني</span>
+        </div>
+      </div>
+    </button>
+  </div>
+</div>
 
                     )}
 
@@ -327,13 +422,13 @@ function Login() {
                             "
                         >
 
-                            <p className="text-sm text-[#73765a] font-medium">
+                            {/* <p className="text-sm text-[#73765a] font-medium">
 
                                 {loginMode === "manager"
                                     ? "تسجيل دخول المدير العام"
                                     : "تسجيل دخول استاذة / غادة"}
 
-                            </p>
+                            </p> */}
 
                             <p className="text-xs text-[#8a7e6f] mt-1">
                                 المستخدم: {loginMode}
@@ -584,7 +679,7 @@ function Login() {
                             </span>
 
                             <a
-                                href="/#"
+                                href=""
                                 className="
                                     mr-2
                                     font-semibold

@@ -657,7 +657,7 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
                 <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 z-10 bg-red-50 shadow-lg">
                     <div>
                         <h3 className="text-xl md:text-2xl font-extrabold text-gray-800">
-                            {isEditMode ? 'تعديل سحب' : 'سحب جديد'}
+                            {isEditMode ? 'تحديث التوقيعات' : 'سحب جديد'}
                         </h3>
                         {isEditMode && formData.transaction_no && (
                             <p className="text-sm text-gray-500 mt-1">
@@ -666,7 +666,7 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
                         )}
                     </div>
                     <button 
-                        className="cursor-pointer text-gray-400 hover:text-gray-600 text-2xl font-light hover:rotate-90 transition-transform"
+                        className="cursor-pointer animate-spin text-gray-400 hover:text-gray-600 text-2xl font-light hover:rotate-90 transition-transform"
                         onClick={handleClose}
                         disabled={loading}
                     >

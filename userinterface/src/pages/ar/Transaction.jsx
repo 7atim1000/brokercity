@@ -346,7 +346,7 @@ const Transactions = () => {
             />
 
             {/* Header */}
-            <div className="flex flex-col shadow-lg sm:flex-row justify-between items-center max-w-full mx-auto px-4 md:px-3 mb-8 md:mb-10 lg:mb-12 gap-4">
+            <div className="flex flex-col shadow-lg sm:flex-row justify-between items-center max-w-full mx-auto px-4 py-2 md:px-3 mb-8 md:mb-10 lg:mb-12 gap-4">
                 <div className="text-center sm:text-right">
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-gray-800 tracking-wide">
                         المعاملات المالية
@@ -366,7 +366,7 @@ const Transactions = () => {
                         + إيداع
                     </button>
                     <button 
-                        className="bg-[#f6b100]/90 cursor-pointer text-red-800 px-6 md:px-8 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-[#8a6a44] hover:text-white hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap"
+                        className="bg-[#a47d52] cursor-pointer text-white px-6 md:px-8 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-[#8a6a44] hover:text-white hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap"
                         onClick={() => {
                             setSelectedTransaction(null);
                             setShowAddWithdrawModal(true);

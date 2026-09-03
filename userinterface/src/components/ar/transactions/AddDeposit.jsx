@@ -667,7 +667,7 @@ const AddDeposit = ({ onClose, transactionData, onSuccess, initialData, isEditMo
                 <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 z-10 bg-green-50 shadow-lg">
                     <div>
                         <h3 className="text-xl md:text-2xl font-extrabold text-gray-800">
-                            {isEditMode ? 'تعديل إيداع' : 'إيداع جديد'}
+                            {isEditMode ? 'تحديث التوقيعات' : 'إيداع جديد'}
                         </h3>
                         {isEditMode && formData.transaction_no && (
                             <p className="text-sm text-gray-500 mt-1">

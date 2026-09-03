@@ -249,61 +249,156 @@ function Login() {
 
                     {!loginMode && (
 
-                        <div className="mb-6 flex flex-col sm:flex-row items-center gap-3">
+                       <div className="mb-6 flex flex-col gap-3 shadow-lg bg-[#f8f7f5] p-2">
+  {/* Owner / Manager - Full width on md+ screens */}
+  <button
+    type="button"
+    onClick={() => handleUserLogin("manager")}
+    className="
+      w-full
+      bg-[#a47d52]
+      py-3
+      px-4
+      rounded-sm
+      transition
+      duration-200
+      cursor-pointer
+      shadow-lg
+      hover:shadow-xl
+      hover:opacity-90
+    "
+  >
+    <div className='flex flex-col md:flex-row md:items-center gap-2'>
+      <div className='flex flex-col gap-1'>
+        <div className='flex items-center gap-1 flex-wrap'>
+          <span className='font-extrabold text-sm text-white'>Mr</span>
+          <span className='text-xs text-white'>/</span>
+          <span className='font-extrabold text-lg md:text-xl text-white'>Abu Hamdan</span>
+        </div>
+        <span className='font-normal text-sm md:text-base text-white'>Director General</span>
+      </div>
+    </div>
+  </button>
 
-                            {/* Owner / Manager */}
+  {/* Other buttons grid - 2 columns on md+ screens */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <button
+      type="button"
+      onClick={() => handleUserLogin("muhsin")}
+      className="
+        w-full
+        bg-[#a47d52]
+        py-3
+        px-4
+        rounded-sm
+        transition
+        duration-200
+        cursor-pointer
+        shadow-lg
+        hover:shadow-xl
+        hover:opacity-90
+      "
+    >
+      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+        <div className='flex flex-col gap-1'>
+          <div className='flex items-center gap-1 flex-wrap'>
+            <span className='font-extrabold text-sm text-white'>Mr</span>
+            <span className='text-xs text-white'>/</span>
+            <span className='font-extrabold text-lg md:text-xl text-white'>Abu Khalid</span>
+          </div>
+          <span className='font-normal text-sm md:text-base text-white'>Administrative Manager</span>
+        </div>
+      </div>
+    </button>
 
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    handleUserLogin("manager")
-                                }
-                                className="
-                                    w-full
-                                    bg-[#a47d52]
-                                    py-3
-                                    px-4
-                                    rounded-sm
-                                    transition
-                                    duration-200
-                                    cursor-pointer
-                                    shadow-lg
-                                    hover:shadow-xl
-                                    hover:opacity-90
-                                "
-                            >
-                                <span className='font-extrabold text-sm text-white'>Mr.</span>
-                                <span className='text-xs text-white'>/ </span>
-                                <span className='font-extrabold text-md text-white'>General Manager</span>
-                            </button>
+    <button
+      type="button"
+      onClick={() => handleUserLogin("ghada")}
+      className="
+        w-full
+        bg-[#a47d52]
+        py-3
+        px-4
+        rounded-sm
+        transition
+        duration-200
+        cursor-pointer
+        shadow-lg
+        hover:shadow-xl
+        hover:opacity-90
+      "
+    >
+      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+        <div className='flex flex-col gap-1'>
+          <div className='flex items-center gap-1 flex-wrap'>
+            <span className='font-extrabold text-sm text-white'>Ms</span>
+            <span className='text-xs text-white'>/</span>
+            <span className='font-extrabold text-lg md:text-xl text-white'>Ghada</span>
+          </div>
+          <span className='font-normal text-sm md:text-base text-white'>Personnel Manager</span>
+        </div>
+      </div>
+    </button>
 
-                            {/* Ghada */}
+    <button
+      type="button"
+      onClick={() => handleUserLogin("muhammed")}
+      className="
+        w-full
+        bg-[#a47d52]
+        py-3
+        px-4
+        rounded-sm
+        transition
+        duration-200
+        cursor-pointer
+        shadow-lg
+        hover:shadow-xl
+        hover:opacity-90
+      "
+    >
+      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+        <div className='flex flex-col gap-1'>
+          <div className='flex items-center gap-1 flex-wrap'>
+            <span className='font-extrabold text-sm text-white'>Ms</span>
+            <span className='text-xs text-white'>/</span>
+            <span className='font-extrabold text-lg md:text-xl text-white'>Muhammed</span>
+          </div>
+          <span className='font-normal text-sm md:text-base text-white'>Marketing Manager</span>
+        </div>
+      </div>
+    </button>
 
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    handleUserLogin("ghada")
-                                }
-                                className="
-                                    w-full
-                                    bg-[#a47d52]
-                                    py-3
-                                    px-4
-                                    rounded-sm
-                                    transition
-                                    duration-200
-                                    cursor-pointer
-                                    shadow-lg
-                                    hover:shadow-xl
-                                    hover:opacity-90
-                                "
-                            >
-                                <span className='font-extrabold text-sm text-white'>Ms.</span>
-                                <span className='text-xs text-white'>/ </span>
-                                <span className='font-extrabold text-md text-white'>Ghada</span>
-                            </button>
-
-                        </div>
+    <button
+      type="button"
+      onClick={() => handleUserLogin("abubakr")}
+      className="
+        w-full
+        bg-[#a47d52]
+        py-3
+        px-4
+        rounded-sm
+        transition
+        duration-200
+        cursor-pointer
+        shadow-lg
+        hover:shadow-xl
+        hover:opacity-90
+      "
+    >
+      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+        <div className='flex flex-col gap-1'>
+          <div className='flex items-center gap-1 flex-wrap'>
+            <span className='font-extrabold text-sm text-white'>Ms</span>
+            <span className='text-xs text-white'>/</span>
+            <span className='font-extrabold text-lg md:text-xl text-white'>Abubakr</span>
+          </div>
+          <span className='font-normal text-sm md:text-base text-white'>Legal Counsel</span>
+        </div>
+      </div>
+    </button>
+  </div>
+</div>
 
                     )}
 
@@ -327,13 +422,13 @@ function Login() {
                             "
                         >
 
-                            <p className="text-sm text-[#73765a] font-medium">
+                            {/* <p className="text-sm text-[#73765a] font-medium">
 
                                 {loginMode === "manager"
                                     ? "General Manager Login"
                                     : "Ms. Ghada Login"}
 
-                            </p>
+                            </p> */}
 
                             <p className="text-xs text-[#8a7e6f] mt-1">
                                 User: {loginMode}
@@ -582,7 +677,7 @@ function Login() {
                             </span>
 
                             <a
-                                href="/#"
+                                href=""
                                 className="
                                     ml-2
                                     font-semibold

@@ -708,10 +708,11 @@ class DashboardSummarySerializer(serializers.Serializer):
 class DashboardChartSerializer(serializers.Serializer):
     """Serializer for chart data"""
     labels = serializers.ListField(child=serializers.CharField())
-    deposits = serializers.ListField(child=serializers.DecimalField(max_digits=15, decimal_places=2))
-    withdraws = serializers.ListField(child=serializers.DecimalField(max_digits=15, decimal_places=2))
-    balance = serializers.ListField(child=serializers.DecimalField(max_digits=15, decimal_places=2))
+    deposits = serializers.ListField(child=serializers.FloatField(default=0))
+    withdraws = serializers.ListField(child=serializers.FloatField(default=0))
+    balance = serializers.ListField(child=serializers.FloatField(default=0))
 
+    
 class DashboardTransactionSerializer(serializers.ModelSerializer):
     """Serializer for recent transactions"""
     type_display = serializers.CharField(source='get_type_display', read_only=True)
