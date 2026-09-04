@@ -6,6 +6,13 @@ import background from "../../assets/images/background.jpg";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { FaLanguage } from "react-icons/fa6";
 
+import { GiInjustice } from "react-icons/gi";
+import { IoMegaphoneOutline } from 'react-icons/io5';
+import { LuUsers, LuUserCog, LuUserRound, LuUserCheck, LuBriefcase } from 'react-icons/lu';
+import { FaBalanceScale } from 'react-icons/fa' ;
+import { FaUserCog, FaBriefcase, FaBuilding, FaTasks, FaClipboardList, FaUserTie } from 'react-icons/fa';
+import { IoBusiness, IoPerson, IoPeople, IoStar, IoShield, IoBriefcase, IoRibbon } from 'react-icons/io5';
+
 
 
 function Login() {
@@ -148,21 +155,23 @@ function Login() {
     return (
 
         <div
-            dir="rtl"
-            className="
-                min-h-screen
-                flex
-                items-center
-                justify-center
-                md:justify-start
-                lg:justify-start
-                p-4 md:p-6
-                md:px-60
-                lg:px-100    
-                bg-cover
-                bg-center
-                bg-no-repeat
-            "
+          dir="rtl"
+className="
+    min-h-screen
+    flex
+    items-center
+    justify-center
+    md:justify-start
+    lg:justify-start
+    p-4 
+    md:px-16
+    lg:px-32
+    xl:px-48
+    2xl:px-64
+    bg-cover
+    bg-center
+    bg-no-repeat
+"
             style={{ backgroundImage: `url(${background})` }}
         >
 
@@ -214,7 +223,7 @@ function Login() {
                             font-extrabold
                             mb-1
                         ">
-                            بروكر سيتي العقاريه
+                            بروكر سيتي العقارية
                         </h1>
 
                         </div>
@@ -256,6 +265,7 @@ function Login() {
     onClick={() => handleUserLogin("manager")}
     className="
       w-full
+      h-15
       bg-[#a47d52]
       py-3
       px-4
@@ -268,7 +278,7 @@ function Login() {
       hover:opacity-90
     "
   >
-    <div className='flex flex-col md:flex-row md:items-center gap-2'>
+    {/* <div className='flex flex-col md:flex-row md:items-center gap-2'>
       <div className='flex flex-col sm:gap-35 sm:flex-row '>
         <div className='flex items-center gap-1'>
           <span className='font-extrabold text-sm text-white'>السيد</span>
@@ -277,6 +287,10 @@ function Login() {
         </div>
         <span className='font-normal text-sm md:text-base text-white '>المدير العام</span>
       </div>
+    </div> */}
+    <div className='flex items-center gap-2 justify-between'>
+        <span className='font-semibold text-sm text-white font-extrabold'>المدير العام</span>
+        <IoShield className='text-white text-xl flex-shrink-0' />
     </div>
   </button>
 
@@ -287,6 +301,7 @@ function Login() {
       onClick={() => handleUserLogin("muhsin")}
       className="
         w-full
+        h-15
         bg-[#a47d52]
         py-3
         px-4
@@ -299,7 +314,7 @@ function Login() {
         hover:opacity-90
       "
     >
-      <div className='flex flex-col md:flex-row md:items-center gap-2'>
+      {/* <div className='flex flex-col md:flex-row md:items-center gap-2'>
         <div className='flex flex-col gap-1'>
           <div className='flex items-center gap-1 flex-wrap'>
             <span className='font-extrabold text-sm text-white'>السيد</span>
@@ -308,7 +323,12 @@ function Login() {
           </div>
           <span className='font-normal text-sm md:text-base text-white'>المدير الاداري</span>
         </div>
-      </div>
+      </div> */}
+        <div className='flex items-center gap-2 justify-between'>
+            <span className='font-semibold text-sm text-white font-extrabold'>المدير الاداري</span>
+            <FaUserTie className='text-white text-xl flex-shrink-0' /> 
+        </div>
+
     </button>
 
     <button
@@ -328,16 +348,10 @@ function Login() {
         hover:opacity-90
       "
     >
-      <div className='flex flex-col md:flex-row md:items-center gap-2'>
-        <div className='flex flex-col gap-1'>
-          <div className='flex items-center gap-1 flex-wrap'>
-            <span className='font-extrabold text-sm text-white'>السيدة</span>
-            <span className='text-xs text-white'>/</span>
-            <span className='font-extrabold text-lg md:text-xl text-white'>غادة</span>
-          </div>
-          <span className='font-normal text-sm md:text-base text-white'>مدير شئون الموظفين</span>
+        <div className='flex items-center gap-2 justify-between'>
+            <span className='font-semibold text-sm text-white font-extrabold'>مدير شؤون الموظفين</span>
+            <LuUsers className='text-white text-xl flex-shrink-0' />   
         </div>
-      </div>
     </button>
 
     <button
@@ -357,16 +371,10 @@ function Login() {
         hover:opacity-90
       "
     >
-      <div className='flex flex-col md:flex-row md:items-center gap-2'>
-        <div className='flex flex-col gap-1'>
-          <div className='flex items-center gap-1 flex-wrap'>
-            <span className='font-extrabold text-sm text-white'>السيد</span>
-            <span className='text-xs text-white'>/</span>
-            <span className='font-extrabold text-lg md:text-xl text-white'>محمد</span>
-          </div>
-          <span className='font-normal text-sm md:text-base text-white'>مدير اداره التسويق</span>
+        <div className='flex items-center gap-2 justify-between'>
+            <span className='font-semibold text-sm text-white font-extrabold'>مدير التسويق</span>
+            <IoMegaphoneOutline className='text-white text-xl flex-shrink-0' />
         </div>
-      </div>
     </button>
 
     <button
@@ -386,16 +394,10 @@ function Login() {
         hover:opacity-90
       "
     >
-      <div className='flex flex-col md:flex-row md:items-center gap-2'>
-        <div className='flex flex-col gap-1'>
-          <div className='flex items-center gap-1 flex-wrap'>
-            <span className='font-extrabold text-sm text-white'>السيد</span>
-            <span className='text-xs text-white'>/</span>
-            <span className='font-extrabold text-lg md:text-xl text-white'>ابوبكر</span>
-          </div>
-          <span className='font-normal text-sm md:text-base text-white'>المستشار القانوني</span>
+        <div className='flex items-center gap-2 justify-between'>
+            <span className='font-semibold text-sm text-white font-extrabold'>المستشار القانوني</span>
+            <FaBalanceScale className='text-white text-xl flex-shrink-0' />
         </div>
-      </div>
     </button>
   </div>
 </div>
