@@ -5,8 +5,12 @@ import logo from '../../assets/images/logo.png';
 import background from "../../assets/images/background.jpg";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { FaLanguage } from "react-icons/fa6";
-
-
+import { GiInjustice } from "react-icons/gi";
+import { IoMegaphoneOutline } from 'react-icons/io5';
+import { LuUsers, LuUserCog, LuUserRound, LuUserCheck, LuBriefcase } from 'react-icons/lu';
+import { FaBalanceScale } from 'react-icons/fa' ;
+import { FaUserCog, FaBriefcase, FaBuilding, FaTasks, FaClipboardList, FaUserTie } from 'react-icons/fa';
+import { IoBusiness, IoPerson, IoPeople, IoStar, IoShield, IoBriefcase, IoRibbon } from 'react-icons/io5';
 
 function Login() {
     const BASE = import.meta.env.VITE_DJANGO_BASE_URL;
@@ -149,20 +153,22 @@ function Login() {
 
         <div
             dir="ltr"
-            className="
+                className="
                 min-h-screen
                 flex
                 items-center
                 justify-center
                 md:justify-start
                 lg:justify-start
-                p-4 md:p-6
-                md:px-60
-                lg:px-100    
+                p-4 
+                md:px-16
+                lg:px-32
+                xl:px-48
+                2xl:px-64
                 bg-cover
                 bg-center
                 bg-no-repeat
-            "
+    "
             style={{ backgroundImage: `url(${background})` }}
         >
 
@@ -256,6 +262,7 @@ function Login() {
     onClick={() => handleUserLogin("manager")}
     className="
       w-full
+      h-15
       bg-[#a47d52]
       py-3
       px-4
@@ -268,15 +275,10 @@ function Login() {
       hover:opacity-90
     "
   >
-    <div className='flex flex-col md:flex-row md:items-center gap-2'>
-      <div className='flex flex-col gap-1'>
-        <div className='flex items-center gap-1 flex-wrap'>
-          <span className='font-extrabold text-sm text-white'>Mr</span>
-          <span className='text-xs text-white'>/</span>
-          <span className='font-extrabold text-lg md:text-xl text-white'>Abu Hamdan</span>
-        </div>
-        <span className='font-normal text-sm md:text-base text-white'>Director General</span>
-      </div>
+
+    <div className='flex items-center gap-2 justify-between'>
+        <span className='font-semibold text-sm text-white font-extrabold'>Director General</span>
+        <IoShield className='text-white text-xl flex-shrink-0' />
     </div>
   </button>
 
@@ -287,6 +289,7 @@ function Login() {
       onClick={() => handleUserLogin("muhsin")}
       className="
         w-full
+        h-15
         bg-[#a47d52]
         py-3
         px-4
@@ -299,23 +302,18 @@ function Login() {
         hover:opacity-90
       "
     >
-      <div className='flex flex-col md:flex-row md:items-center gap-2'>
-        <div className='flex flex-col gap-1'>
-          <div className='flex items-center gap-1 flex-wrap'>
-            <span className='font-extrabold text-sm text-white'>Mr</span>
-            <span className='text-xs text-white'>/</span>
-            <span className='font-extrabold text-lg md:text-xl text-white'>Abu Khalid</span>
-          </div>
-          <span className='font-normal text-sm md:text-base text-white'>Administrative Manager</span>
+        <div className='flex items-center gap-2 justify-between'>
+            <span className='font-semibold text-sm text-white font-extrabold'>Admin Manager</span>
+            <FaUserTie className='text-white text-xl flex-shrink-0' /> 
         </div>
-      </div>
     </button>
 
     <button
-      type="button"
-      onClick={() => handleUserLogin("ghada")}
-      className="
+       type="button"
+       onClick={() => handleUserLogin("ghada")}
+       className="
         w-full
+        h-15
         bg-[#a47d52]
         py-3
         px-4
@@ -328,16 +326,10 @@ function Login() {
         hover:opacity-90
       "
     >
-      <div className='flex flex-col md:flex-row md:items-center gap-2'>
-        <div className='flex flex-col gap-1'>
-          <div className='flex items-center gap-1 flex-wrap'>
-            <span className='font-extrabold text-sm text-white'>Ms</span>
-            <span className='text-xs text-white'>/</span>
-            <span className='font-extrabold text-lg md:text-xl text-white'>Ghada</span>
-          </div>
-          <span className='font-normal text-sm md:text-base text-white'>Personnel Manager</span>
+        <div className='flex items-center gap-2 justify-between'>
+            <span className='font-semibold text-sm text-white font-extrabold'>Personnel Manager</span>
+            <LuUsers className='text-white text-xl flex-shrink-0' />   
         </div>
-      </div>
     </button>
 
     <button
@@ -345,6 +337,7 @@ function Login() {
       onClick={() => handleUserLogin("muhammed")}
       className="
         w-full
+        h-15
         bg-[#a47d52]
         py-3
         px-4
@@ -357,16 +350,10 @@ function Login() {
         hover:opacity-90
       "
     >
-      <div className='flex flex-col md:flex-row md:items-center gap-2'>
-        <div className='flex flex-col gap-1'>
-          <div className='flex items-center gap-1 flex-wrap'>
-            <span className='font-extrabold text-sm text-white'>Ms</span>
-            <span className='text-xs text-white'>/</span>
-            <span className='font-extrabold text-lg md:text-xl text-white'>Muhammed</span>
-          </div>
-          <span className='font-normal text-sm md:text-base text-white'>Marketing Manager</span>
+        <div className='flex items-center gap-2 justify-between'>
+            <span className='font-semibold text-sm text-white font-extrabold'>marketing Manager</span>
+            <IoMegaphoneOutline className='text-white text-xl flex-shrink-0' />
         </div>
-      </div>
     </button>
 
     <button
@@ -374,8 +361,9 @@ function Login() {
       onClick={() => handleUserLogin("abubakr")}
       className="
         w-full
+        h-15
         bg-[#a47d52]
-        py-3
+        py-1
         px-4
         rounded-sm
         transition
@@ -386,16 +374,10 @@ function Login() {
         hover:opacity-90
       "
     >
-      <div className='flex flex-col md:flex-row md:items-center gap-2'>
-        <div className='flex flex-col gap-1'>
-          <div className='flex items-center gap-1 flex-wrap'>
-            <span className='font-extrabold text-sm text-white'>Ms</span>
-            <span className='text-xs text-white'>/</span>
-            <span className='font-extrabold text-lg md:text-xl text-white'>Abubakr</span>
-          </div>
-          <span className='font-normal text-sm md:text-base text-white'>Legal Counsel</span>
+        <div className='flex items-center gap-2 justify-between'>
+            <span className='font-semibold text-sm text-white font-extrabold'>Legal Counsel</span>
+            <FaBalanceScale className='text-white text-xl flex-shrink-0' />
         </div>
-      </div>
     </button>
   </div>
 </div>
