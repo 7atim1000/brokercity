@@ -986,7 +986,7 @@ function Login() {
                                     />
 
                                     {form.password.length > 0 && (
-                                        <div className="absolute right-2.5 md:right-3 top-1/2 -translate-y-1/2">
+                                        <div className="absolute left-2.5 md:left-3 top-1/2 -translate-y-1/2">
                                             <div className={`
                                                 w-2 h-2 rounded-full 
                                                 ${form.password.length >= 4
