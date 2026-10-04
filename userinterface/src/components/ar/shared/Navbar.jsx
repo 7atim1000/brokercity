@@ -90,15 +90,16 @@ const Navbar = () => {
                 border-b
                 border-[#a47d52]/30
                 shadow-[0_4px_20px_rgba(164,125,82,0.25)]
-                backdrop-blur-sm
+                
                 z-50
                 px-4
                 sm:px-6
                 transition-all
                 duration-300
-                bg-gradient-to-l from-[#f8f7f5]/10 via-[#a47d52]/80 to-[#a47d52]/10 backdrop-blur-md 
+                bg-gradient-to-l from-[#f8f7f5]/10 via-[#a47d52]/80 to-[#a47d52]/10  
             "
         >
+            {/* backdrop-blur-md    backdrop-blur-sm*/}
 
             {/* 3-column layout: right (title) | center (logo) | left (user actions) */}
             <div
@@ -117,11 +118,12 @@ const Navbar = () => {
                     className="
                         flex
                         flex-col
-                        items-start
+                        items-center
                         justify-center
                         leading-tight
                         min-w-0
                         shrink
+                        mx-5
                     "
                 >
                     <span
@@ -133,6 +135,7 @@ const Navbar = () => {
                             md:text-lg
                             md:text-base
                             tracking-wide
+                            scale-120
                             whitespace-nowrap
                             drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]
                         "
@@ -140,21 +143,21 @@ const Navbar = () => {
                         منصة بروكر سيتي العقارية الرقمية
                     </span>
                     <span
-                        className="
-                            text-[#a47d59]
-                            
-                            font-extrabold
-                            text-[10px]
-                            sm:text-sm
-                            md:text-sm
-                            
-                            tracking-wider
-                            whitespace-nowrap
-                        "
-                    >
-                        
-                    Broker City Real Estate
-                    </span>
+    className="
+        text-[#7a5220]
+        font-extrabold
+        text-[15px]
+        sm:text-sm
+        md:text-sm
+        tracking-wider
+        whitespace-nowrap
+        scale-120
+        items-center
+    "
+    style={{ textShadow: '0 1px 2px #f8f7f5' }}
+>
+    Broker City Real Estate
+</span>
                 </div>
 
 
@@ -172,8 +175,6 @@ const Navbar = () => {
         
         rounded-full
         p-1
-        sm:p-1  
-    
         transition-transform
         duration-300
         hover:scale-110
@@ -183,11 +184,12 @@ const Navbar = () => {
         src={logo}
         alt="Broker City"
         className="
+          
             h-15
             sm:h-20
             w-auto
             object-contain
-            scale-115
+            scale-145
             contrast-125
             saturate-125
         "

@@ -73,8 +73,8 @@ function Sidebar({ onHoverChange }) {
                 ease-in-out
                 flex
                 flex-col
-                bg-gradient-to-b from-[#a47d52]/10 via-[#a47d52]/10 to-[#f8f7f5]/90 backdrop-blur-md
-                ${isExpanded ? "w-64" : "w-16 sm:w-64 md:w-16"}
+                bg-gradient-to-b from-[#a47d52]/10 via-[#a47d52]/10 to-[#f8f7f5]/90 
+                ${isExpanded ? "w-64" : "w-16 sm:w-64 md:w-16"} 
             `}
             style={{
                 width: isDesktop ? (isHovered ? "16rem" : "4rem") : undefined,
@@ -105,11 +105,10 @@ function Sidebar({ onHoverChange }) {
                                             ${isExpanded ? "text-sm sm:text-base" : "text-xs"}
                                             cursor-pointer
                                             group
-                                            text-white
                                             ${
                                                 isExpandedItem
-                                                    ? "bg-gradient-to-r from-[#d4a574] to-[#b88d63] text-white shadow-lg shadow-[#a47d52]/40"
-                                                    : "bg-white/5 hover:bg-white/15 shadow-sm hover:shadow-md"
+                                                    ? "bg-[#f8f7f5] text-[#B9A58A] shadow-lg shadow-[#a47d52]/40"
+                                                    : "bg-[#f8f7f5] text-[#a47d52] hover:bg-white/60 shadow-sm hover:shadow-md"
                                             }
                                         `}
                                     >
@@ -117,18 +116,18 @@ function Sidebar({ onHoverChange }) {
                                             <Icon
                                                 size={isExpanded ? 20 : 18}
                                                 strokeWidth={2.5}
-                                                className="
-                                                    text-white
-                                                    drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]
+                                                className={`
+                                                    ${isExpandedItem ? "text-[#B9A58A]" : "text-[#a47d52]"}
+                                                    drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]
                                                     transition-all
                                                     duration-300
                                                     shrink-0
-                                                "
+                                                `}
                                             />
                                             <span
                                                 className={`
                                                     font-black
-                                                    text-white
+                                                    ${isExpandedItem ? "text-[#B9A58A]" : "text-[#a47d52]"}
                                                     tracking-wide
                                                     whitespace-nowrap
                                                     transition-all
@@ -149,7 +148,7 @@ function Sidebar({ onHoverChange }) {
                                             <MdExpandCircleDown
                                                 size={22}
                                                 className={`
-                                                    text-white
+                                                    ${isExpandedItem ? "text-[#B9A58A]" : "text-[#a47d52]"}
                                                     transition-transform
                                                     duration-300
                                                     ${
@@ -175,21 +174,21 @@ function Sidebar({ onHoverChange }) {
                                             group
                                             ${
                                                 isActive
-                                                    ? "bg-gradient-to-r from-[#d4a574] to-[#b88d63] text-white shadow-lg shadow-[#a47d52]/40"
-                                                    : "bg-white/5 hover:bg-white/15 text-white shadow-sm hover:shadow-md"
+                                                    ? "bg-[#f8f7f5] text-[#B9A58A] shadow-lg shadow-[#a47d52]/40"
+                                                    : "bg-[#f8f7f5] text-[#a47d52] hover:bg-white/60 shadow-sm hover:shadow-md"
                                             }
                                         `}
                                     >
                                         <Icon
                                             size={isExpanded ? 20 : 18}
                                             strokeWidth={1.1}
-                                            className="
-                                                text-white
-                                                drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]
+                                            className={`
+                                                ${isActive ? "text-[#B9A58A]" : "text-[#a47d52]"}
+                                                drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]
                                                 transition-all
                                                 duration-300
                                                 shrink-0
-                                            "
+                                            `}
                                         />
                                         <span
                                             className={`
@@ -198,7 +197,7 @@ function Sidebar({ onHoverChange }) {
                                                 whitespace-nowrap
                                                 transition-all
                                                 duration-300
-                                                text-white
+                                                ${isActive ? "text-[#B9A58A]" : "text-[#a47d52]"}
                                                 ${isExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"}
                                             `}
                                         >
@@ -213,7 +212,7 @@ function Sidebar({ onHoverChange }) {
                                             mt-1 mr-1 space-y-1
                                             border-r-2 border-[#d4a574]/40
                                             pr-2
-                                            bg-white/5
+                                            bg-[#f8f7f5]
                                             rounded-l-xl
                                             py-1
                                             animate-[fadeIn_0.2s_ease-in]
@@ -240,23 +239,30 @@ function Sidebar({ onHoverChange }) {
                                                             font-black
                                                             ${
                                                                 isSubActive
-                                                                    ? "bg-gradient-to-r from-[#d4a574] to-[#b88d63] text-white shadow-md"
-                                                                    : "text-white hover:bg-white/15 hover:shadow-sm"
+                                                                    ? "bg-[#f8f7f5] text-[#B9A58A] shadow-md"
+                                                                    : "bg-[#f8f7f5] text-[#a47d52] hover:bg-white/60 hover:shadow-sm"
                                                             }
                                                         `}
                                                     >
                                                         <SubIcon
                                                             size={16}
                                                             strokeWidth={2.5}
-                                                            className="
-                                                                text-white
-                                                                drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]
+                                                            className={`
+                                                                ${isSubActive ? "text-[#B9A58A]" : "text-[#a47d52]"}
+                                                                drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]
                                                                 transition-colors
                                                                 duration-200
                                                                 shrink-0
-                                                            "
+                                                            `}
                                                         />
-                                                        <span className="font-black tracking-wide text-white whitespace-nowrap">
+                                                        <span
+                                                            className={`
+                                                                font-black
+                                                                tracking-wide
+                                                                whitespace-nowrap
+                                                                ${isSubActive ? "text-[#B9A58A]" : "text-[#a47d52]"}
+                                                            `}
+                                                        >
                                                             {subItem.name}
                                                         </span>
                                                     </Link>
@@ -304,6 +310,7 @@ function Sidebar({ onHoverChange }) {
                             className={`
                                 border-b-3 border-white
                                 flex items-center
+                                bg-[#f8f7f5]
                                 ${isExpanded ? "justify-start w-full gap-2 px-3 py-2.5 rounded-xl text-sm sm:text-base" : "justify-center w-10 h-10 mx-auto rounded-full p-0 gap-0 text-xs"}
                                 transition-all
                                 duration-300
@@ -347,7 +354,6 @@ function Sidebar({ onHoverChange }) {
 }
 
 export default Sidebar;
-
 
 
 // import { useState, useEffect, useRef } from "react";
