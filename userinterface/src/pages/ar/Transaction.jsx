@@ -20,8 +20,6 @@ import { FaFileSignature } from "react-icons/fa6";
 
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-// Note: if your installed jspdf version only exposes a named export, use:
-// import { jsPDF } from 'jspdf';
 import ExcelJS from 'exceljs';
 
 import logogo from '../../assets/images/logogo-removebg.png'
@@ -29,7 +27,7 @@ import logogo from '../../assets/images/logogo-removebg.png'
 // Base URL from environment variables
 const BASE = import.meta.env.VITE_DJANGO_BASE_URL;
 
-// Company identity used on the printed worksheet (mirrors the accounting .xlsx export)
+// Company identity used on the printed worksheet
 const COMPANY_NAME_EN = 'Broker City Properties';
 const COMPANY_NAME_AR = 'بروكر سيتي العقارية';
 
@@ -46,14 +44,6 @@ const renderAccountValue = (value) => {
 const formatMoney = (value) =>
     (parseFloat(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// ✅ UPDATED: Date format is now DD/Mon/YYYY (e.g. 21/Sep/2026)
-// This single helper is used by:
-//   - the on-screen table
-//   - the print / PDF worksheet (print-area)
-//   - the Excel export (generateExcel)
-// so all three stay consistent.
-// The direction (LTR) is enforced at the render site with dir="ltr",
-// so the text always reads left-to-right even inside the RTL layout.
 const formatDate = (value) => {
     if (!value) return '-';
     try {
@@ -62,14 +52,12 @@ const formatDate = (value) => {
 
         const day = String(d.getDate()).padStart(2, '0');
 
-        // English 3-letter month abbreviations (Jan, Feb, ... Dec)
         const monthNames = [
             'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
             'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
         ];
         const month = monthNames[d.getMonth()];
-
-        const year = d.getFullYear(); // full 4-digit year
+        const year = d.getFullYear();
         return `${day}/${month}/${year}`;
     } catch {
         return value;
@@ -95,17 +83,24 @@ const Transactions = () => {
     const [nextPage, setNextPage] = useState(null);
     const [previousPage, setPreviousPage] = useState(null);
 
+    // ✅ NEW: DB-wide totals (all pages, honoring current filters)
+    const [globalTotals, setGlobalTotals] = useState({
+        totalDeposit: 0,
+        totalWithdraw: 0,
+        balance: 0,
+        loaded: false,
+    });
+
     // Modal state for TransactionDetails
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedTransactionId, setSelectedTransactionId] = useState(null);
 
-    // Export state — the printable/downloadable worksheet is built from the FULL filtered
-    // dataset, not just the current page, so the report matches the .xlsx export.
+    // Export state
     const [printData, setPrintData] = useState([]);
-    const [isExporting, setIsExporting] = useState(false); // fetching data for PDF / Excel
-    const [pendingExportAction, setPendingExportAction] = useState(null); // 'pdf' | 'excel' | null
-    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false); // rendering the PDF file itself
-    const [isGeneratingExcel, setIsGeneratingExcel] = useState(false); // building the .xlsx file itself
+    const [isExporting, setIsExporting] = useState(false);
+    const [pendingExportAction, setPendingExportAction] = useState(null);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [isGeneratingExcel, setIsGeneratingExcel] = useState(false);
 
     const handleViewTransaction = (transactionId) => {
         setSelectedTransactionId(transactionId);
@@ -117,13 +112,60 @@ const Transactions = () => {
         setSelectedTransactionId(null);
     };
 
-    // Build the query string shared by the paginated fetch and the "fetch everything for export" call
     const buildQuery = ({ page, size }) => {
         let url = `${BASE}/api/transactions/?page=${page}&page_size=${size}`;
         if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
         if (filterType) url += `&type=${filterType}`;
         if (filterPaymentMethod) url += `&payment_method=${filterPaymentMethod}`;
         return url;
+    };
+
+    // =========================================================
+    // ✅ NEW: Fetch global totals from the FULL filtered dataset
+    //    (used by the summary cards so they reflect ALL pages, not just current page)
+    // =========================================================
+    const fetchGlobalTotals = async () => {
+        try {
+            const token = localStorage.getItem('access_token');
+            if (!token) return;
+
+            // Fetch all filtered rows (no pagination limit)
+            const url = buildQuery({ page: 1, size: 100000 });
+            const response = await fetch(url, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const rows = Array.isArray(data?.results)
+                ? data.results
+                : Array.isArray(data)
+                    ? data
+                    : [];
+
+            const totalDeposit = rows.reduce(
+                (sum, t) => (t.type === 'deposit' ? sum + parseFloat(t.amount || 0) : sum),
+                0
+            );
+            const totalWithdraw = rows.reduce(
+                (sum, t) => (t.type === 'withdraw' ? sum + parseFloat(t.amount || 0) : sum),
+                0
+            );
+
+            setGlobalTotals({
+                totalDeposit,
+                totalWithdraw,
+                balance: totalDeposit - totalWithdraw,
+                loaded: true,
+            });
+        } catch (err) {
+            console.error('Error fetching global totals:', err);
+        }
     };
 
     // Fetch transactions with pagination
@@ -161,14 +203,11 @@ const Transactions = () => {
 
             const data = await response.json();
 
-            // ✅ VERIFIED DESC SORT:
-            // We sort by `transaction_date` DESC (newest first). If two rows share the
-            // same date we fall back to `id` DESC so the last inserted row always wins.
             const sortDesc = (rows) =>
                 [...rows].sort((a, b) => {
                     const diff = new Date(b.transaction_date) - new Date(a.transaction_date);
                     if (diff !== 0) return diff;
-                    return (b.id || 0) - (a.id || 0); // tie-breaker: newest id first
+                    return (b.id || 0) - (a.id || 0);
                 });
 
             if (data && data.results && Array.isArray(data.results)) {
@@ -198,7 +237,7 @@ const Transactions = () => {
         }
     };
 
-    // Handle search with debounce
+    // Handle search with debounce — also refresh global totals
     useEffect(() => {
         const delayDebounceFn = setTimeout(() => {
             if (currentPage === 1) {
@@ -206,6 +245,8 @@ const Transactions = () => {
             } else {
                 setCurrentPage(1);
             }
+            // ✅ Refresh global totals whenever filters/search change
+            fetchGlobalTotals();
         }, 500);
 
         return () => clearTimeout(delayDebounceFn);
@@ -216,9 +257,10 @@ const Transactions = () => {
         fetchTransactions(currentPage);
     }, [currentPage]);
 
-    // Initial fetch
+    // Initial fetch — load page + global totals
     useEffect(() => {
         fetchTransactions(1);
+        fetchGlobalTotals();
     }, []);
 
     // Once the full dataset is fetched, run whichever export action was requested
@@ -274,6 +316,8 @@ const Transactions = () => {
 
             toast.success('✅ تم حذف المعاملة بنجاح');
             fetchTransactions(currentPage);
+            // ✅ Refresh global totals after delete
+            fetchGlobalTotals();
         } catch (error) {
             console.error('Error deleting transaction:', error);
             toast.error('❌ حدث خطأ أثناء حذف المعاملة');
@@ -293,12 +337,14 @@ const Transactions = () => {
         }
     };
 
-    // Handle modal close
+    // Handle modal close — refresh both page and global totals
     const handleModalClose = () => {
         setShowAddDepositModal(false);
         setShowAddWithdrawModal(false);
         setSelectedTransaction(null);
         fetchTransactions(currentPage);
+        // ✅ Refresh global totals after add/edit
+        fetchGlobalTotals();
     };
 
     // Reset all filters back to defaults
@@ -309,7 +355,7 @@ const Transactions = () => {
         setCurrentPage(1);
     };
 
-    // Fetch the ENTIRE filtered result set (not just this page) — shared by PDF and Excel export
+    // Fetch the ENTIRE filtered result set — shared by PDF and Excel export
     const fetchFullDatasetForExport = async () => {
         const token = localStorage.getItem('access_token');
 
@@ -334,7 +380,6 @@ const Transactions = () => {
         const data = await response.json();
         const rows = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
 
-        // Chronological order, oldest first, to match the running balance in the .xlsx worksheet
         return [...rows].sort((a, b) => new Date(a.transaction_date) - new Date(b.transaction_date));
     };
 
@@ -376,7 +421,6 @@ const Transactions = () => {
         }
     };
 
-    // Renders the exact same print-area DOM (same design/colors/logo) into a multi-page PDF
     const generatePdf = async () => {
         const element = document.querySelector('.print-area');
         if (!element) return;
@@ -421,8 +465,6 @@ const Transactions = () => {
         }
     };
 
-    // Builds a styled .xlsx workbook — same columns, same colors (#BF9000 header / #FFE699
-    // totals), same logo and layout as the printed worksheet / PDF export.
     const generateExcel = async () => {
         try {
             setIsGeneratingExcel(true);
@@ -436,11 +478,9 @@ const Transactions = () => {
                 pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
             });
 
-            // ✅ 10 columns only (matches the 10 header names)
-            // Order: S | Date | Voucher No. | Invoice No. | Recipient | Description | To Account | Income | Expense | Balance
             const columnWidths = [10, 13, 16, 24, 34, 18, 18, 14, 14, 16];
             sheet.columns = columnWidths.map((width) => ({ width }));
-            const columnCount = columnWidths.length; // = 10
+            const columnCount = columnWidths.length;
 
             const thinBorder = {
                 top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
@@ -449,9 +489,6 @@ const Transactions = () => {
                 right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
             };
 
-            // ============================================================
-            // ROW 1 — Title (merged across all 10 columns)
-            // ============================================================
             sheet.mergeCells(1, 1, 1, columnCount);
             const titleRow = sheet.getRow(1);
             titleRow.height = 56;
@@ -464,7 +501,6 @@ const Transactions = () => {
             titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
             titleCell.border = thinBorder;
 
-            // Logo (best-effort)
             try {
                 const logoResponse = await fetch(logogo);
                 const logoBuffer = await logoResponse.arrayBuffer();
@@ -477,20 +513,17 @@ const Transactions = () => {
                 console.warn('Logo could not be embedded in the Excel file:', imgErr);
             }
 
-            // ============================================================
-            // ROW 2 — Header (10 columns, dark gold #BF9000)
-            // ============================================================
             const headerRow = sheet.addRow([
-                'Serial No.\nتسلسلي',                            // 1
-                'Date\nالتاريخ',                                  // 2
-                'Voucher No.\nرقم السند',                         // 3
-                'Invoice/Receipt No\nرقم الفاتوره / الايصال',     // 4
-                'Recipient / Beneficiary\nالمستلم / المستفيد',   // 5
-                'Description\nالبيان',                            // 6
-                'To Account Name\nتم التحويل الى حساب',           // 7
-                'Income\nالدخل',                                  // 8
-                'Expense\nالمصروف',                               // 9
-                'Balance\nالرصيد',                                // 10
+                'Serial No.\nتسلسلي',
+                'Date\nالتاريخ',
+                'Voucher No.\nرقم السند',
+                'Invoice/Receipt No\nرقم الفاتوره / الايصال',
+                'Recipient / Beneficiary\nالمستلم / المستفيد',
+                'Description\nالبيان',
+                'To Account Name\nتم التحويل الى حساب',
+                'Income\nالدخل',
+                'Expense\nالمصروف',
+                'Balance\nالرصيد',
             ]);
             headerRow.height = 34;
             headerRow.eachCell((cell) => {
@@ -500,23 +533,20 @@ const Transactions = () => {
                 cell.border = thinBorder;
             });
 
-            // ============================================================
-            // DATA ROWS — 10 values per row (columns 8/9/10 = Income/Expense/Balance)
-            // ============================================================
             printRows.forEach((t, index) => {
                 const row = sheet.addRow([
-                    index + 1,                                                             // 1
-                    formatDate(t.transaction_date),                                        // 2
-                    t.transaction_no,                                                      // 3
-                    t.document_no || '-',                                                  // 4
-                    t.type === 'withdraw'                                                  // 5
+                    index + 1,
+                    formatDate(t.transaction_date),
+                    t.transaction_no,
+                    t.document_no || '-',
+                    t.type === 'withdraw'
                         ? (t.person_receipt || '-')
                         : (t.person_deliver || '-'),
-                    t.statement || '-',                                                    // 6
-                    t.account_to || '-',                                                   // 7
-                    t.type === 'deposit' ? (parseFloat(t.amount) || 0) : null,             // 8  Income
-                    t.type === 'withdraw' ? (parseFloat(t.amount) || 0) : null,            // 9  Expense
-                    t.runningBalance,                                                      // 10 Balance
+                    t.statement || '-',
+                    t.account_to || '-',
+                    t.type === 'deposit' ? (parseFloat(t.amount) || 0) : null,
+                    t.type === 'withdraw' ? (parseFloat(t.amount) || 0) : null,
+                    t.runningBalance,
                 ]);
 
                 const zebraFill = index % 2 === 0 ? 'FFFFFFFF' : 'FFFAF7F0';
@@ -530,35 +560,24 @@ const Transactions = () => {
                     };
                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: zebraFill } };
 
-                    // number format on columns 8, 9, 10 (Income, Expense, Balance)
                     if (colNumber === 8 || colNumber === 9 || colNumber === 10) {
                         cell.numFmt = '#,##0.00';
                     }
                 });
 
-                // colors on the correct columns
-                row.getCell(8).font = { bold: true, color: { argb: 'FF1A7A1A' } }; // Income — green
-                row.getCell(9).font = { bold: true, color: { argb: 'FFB30000' } }; // Expense — red
-                row.getCell(10).font = { bold: true, color: { argb: 'FF000000' } }; // Balance — black
+                row.getCell(8).font = { bold: true, color: { argb: 'FF1A7A1A' } };
+                row.getCell(9).font = { bold: true, color: { argb: 'FFB30000' } };
+                row.getCell(10).font = { bold: true, color: { argb: 'FF000000' } };
             });
 
-            // ============================================================
-            // TOTALS ROW — 10 values, merge columns 1–7 for the label
-            // ============================================================
             const totalsRow = sheet.addRow([
-                '',                            // 1
-                '',                            // 2
-                '',                            // 3
-                '',                            // 4
-                '',                            // 5
-                '',                            // 6
-                'Gross Total — المجموع الكلي',  // 7  (label starts here)
-                printTotals.totalIncome,       // 8  Income
-                printTotals.totalExpense,      // 9  Expense
-                printTotals.balance,           // 10 Balance
+                '', '', '', '', '', '',
+                'Gross Total — المجموع الكلي',
+                printTotals.totalIncome,
+                printTotals.totalExpense,
+                printTotals.balance,
             ]);
 
-            // only ONE merge call — columns 1 through 7
             sheet.mergeCells(totalsRow.number, 1, totalsRow.number, 7);
 
             totalsRow.eachCell((cell, colNumber) => {
@@ -570,15 +589,11 @@ const Transactions = () => {
                     vertical: 'middle',
                 };
 
-                // number format on columns 8, 9, 10
                 if (colNumber === 8 || colNumber === 9 || colNumber === 10) {
                     cell.numFmt = '#,##0.00';
                 }
             });
 
-            // ============================================================
-            // WRITE FILE
-            // ============================================================
             const buffer = await workbook.xlsx.writeBuffer();
             const blob = new Blob([buffer], {
                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -599,9 +614,6 @@ const Transactions = () => {
         }
     };
 
-
-
-    // Get type badge
     const getTypeBadge = (type) => {
         if (type === 'deposit') {
             return <span className="px-3 py-1 rounded-xs text-xs font-bold bg-green-100 text-green-800">إيداع</span>;
@@ -611,7 +623,6 @@ const Transactions = () => {
         return <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-800">{type}</span>;
     };
 
-    // Get payment method badge
     const getPaymentMethodBadge = (method) => {
         if (method === 'banks') {
             return <span className="px-3 py-1 rounded-xs text-xs font-bold bg-blue-100 text-blue-800">بنوك</span>;
@@ -621,14 +632,12 @@ const Transactions = () => {
         return <span className="px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-800">{method}</span>;
     };
 
-    // Withdraw shows who received the cash (person_receipt); deposit shows who delivered it (person_deliver)
     const getPersonDisplay = (transaction) => {
         if (transaction.type === 'withdraw') return transaction.person_receipt || '-';
         if (transaction.type === 'deposit') return transaction.person_deliver || '-';
         return transaction.person_receipt || transaction.person_deliver || '-';
     };
 
-    // Get amount display with color
     const getAmountDisplay = (transaction) => {
         const amount = parseFloat(transaction.amount);
         if (transaction.type === 'deposit') {
@@ -638,7 +647,6 @@ const Transactions = () => {
         }
     };
 
-    // Pagination controls
     const handlePageChange = (page) => {
         if (page >= 1 && page <= totalPages) {
             setCurrentPage(page);
@@ -651,7 +659,7 @@ const Transactions = () => {
         setCurrentPage(1);
     };
 
-    // Totals for the current page — mirrors the single-row table footer below
+    // Current-page totals (kept for the table footer)
     const pageStats = useMemo(() => {
         const totalDeposit = transactions.reduce(
             (sum, t) => (t.type === 'deposit' ? sum + parseFloat(t.amount || 0) : sum),
@@ -664,7 +672,7 @@ const Transactions = () => {
         return { totalDeposit, totalWithdraw, balance: totalDeposit - totalWithdraw };
     }, [transactions]);
 
-    // Totals + running balance for the full print/export dataset
+    // Running balance for print/export dataset
     const printRows = useMemo(() => {
         let running = 0;
         return printData.map((t) => {
@@ -689,7 +697,6 @@ const Transactions = () => {
 
     const printGeneratedAt = new Date().toLocaleString('ar-EG');
 
-    // Pagination component
     const renderPagination = () => {
         if (totalPages <= 1) return null;
 
@@ -707,11 +714,11 @@ const Transactions = () => {
         }
 
         return (
-            <div className="flex items-center gap-2 mt-6 justify-center">
+            <div className="flex flex-wrap items-center gap-2 mt-6 justify-center">
                 <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    className="px-3 sm:px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-sm"
                 >
                     السابق
                 </button>
@@ -720,7 +727,7 @@ const Transactions = () => {
                     <>
                         <button
                             onClick={() => handlePageChange(1)}
-                            className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                            className="px-3 sm:px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-200 text-sm"
                         >
                             1
                         </button>
@@ -732,7 +739,7 @@ const Transactions = () => {
                     <button
                         key={page}
                         onClick={() => handlePageChange(page)}
-                        className={`px-4 py-2 rounded-lg border transition-all duration-200 ${
+                        className={`px-3 sm:px-4 py-2 rounded-lg border transition-all duration-200 text-sm ${
                             currentPage === page
                                 ? 'bg-[#a47d52] text-white border-[#a47d52]'
                                 : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
@@ -747,7 +754,7 @@ const Transactions = () => {
                         {endPage < totalPages - 1 && <span className="px-2 text-gray-500">...</span>}
                         <button
                             onClick={() => handlePageChange(totalPages)}
-                            className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                            className="px-3 sm:px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-200 text-sm"
                         >
                             {totalPages}
                         </button>
@@ -757,7 +764,7 @@ const Transactions = () => {
                 <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    className="px-3 sm:px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-sm"
                 >
                     التالي
                 </button>
@@ -766,13 +773,7 @@ const Transactions = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#f8f7f5] py-10 px-5 md:py-12 md:px-8 lg:py-5 lg:px-0 rtl">
-            {/*
-              Print-only CSS. Colors are hard-coded hex values (matching the accounting .xlsx
-              worksheet's theme: dark gold header #BF9000, light gold totals #FFE699) and forced
-              on with print-color-adjust, because Tailwind utility colors are stripped by most
-              browsers' default "background graphics off" print setting.
-            */}
+        <div className="min-h-screen bg-[#f8f7f5] py-6 px-3 sm:py-8 sm:px-4 md:py-10 md:px-6 lg:py-5 lg:px-0 rtl">
             <style>{`
                 .print-area {
                     position: absolute;
@@ -818,23 +819,28 @@ const Transactions = () => {
                 theme="light"
             />
 
-            {/* Header */}
-            <div className="no-print flex flex-col shadow-lg sm:flex-row justify-between items-center max-w-full mx-auto px-4 md:px-3 mb-5 md:mb-5 lg:mb-5 gap-4 bg-white rounded-lg">
-                <div className="flex items-center gap-4 text-center sm:text-right">
-                    {/* <img src={logogo} alt="Broker City Properties" className="hidden sm:block h-14 w-14 rounded-full object-cover shadow" />
-                     */}
+            {/* ================= HEADER ================= */}
+            <div className="no-print flex flex-col shadow-lg justify-between items-center max-w-full mx-auto px-4 md:px-3 mb-5 gap-4 bg-white rounded-lg py-4">
+                <div className="flex items-center gap-4 text-center">
                     <div>
-                        <h2 className="text-2xl md:text-2xl font-bold lg:text-2xl font-extrabold text-gray-800 tracking-wide">
+                        <h2 className="text-xl sm:text-2xl font-extrabold text-gray-800 tracking-wide">
                             المعاملات المالية
                         </h2>
-                        <p className="text-base md:text-md text-gray-600 mt-1">
+                        <p className="text-sm sm:text-base text-gray-600 mt-1">
                             إدارة المعاملات المالية (إيداع / سحب)
                         </p>
                     </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3">
+
+                {/*
+                  ✅ Buttons grid:
+                  - Mobile (< sm): 2 columns × 2 rows (each button takes half the row)
+                  - Tablet (sm to md): 2 columns × 2 rows (still paired, more space per button)
+                  - Laptop+ (lg+): single row, 4 across (unchanged desktop design)
+                */}
+                <div className="grid grid-cols-2 gap-3 w-full lg:flex lg:flex-row lg:w-auto lg:gap-3">
                     <button
-                        className="bg-green-600 cursor-pointer text-white px-6 md:px-8 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-green-700 hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap"
+                        className="bg-green-600 cursor-pointer text-white px-4 sm:px-6 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-green-700 hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap w-full lg:w-auto"
                         onClick={() => {
                             setSelectedTransaction(null);
                             setShowAddDepositModal(true);
@@ -842,8 +848,9 @@ const Transactions = () => {
                     >
                         + إيداع
                     </button>
+
                     <button
-                        className="bg-[#a47d52] cursor-pointer text-white px-6 md:px-8 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-[#8a6a44] hover:text-white hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap"
+                        className="bg-[#a47d52] cursor-pointer text-white px-4 sm:px-6 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-[#8a6a44] hover:text-white hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap w-full lg:w-auto"
                         onClick={() => {
                             setSelectedTransaction(null);
                             setShowAddWithdrawModal(true);
@@ -853,7 +860,7 @@ const Transactions = () => {
                     </button>
 
                     <button
-                        className="flex items-center justify-center gap-2 bg-[#E5322D] cursor-pointer text-white px-6 md:px-8 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-[#b8241f] hover:text-white hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        className="flex items-center justify-center gap-2 bg-[#E5322D] cursor-pointer text-white px-4 sm:px-6 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-[#b8241f] hover:text-white hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap w-full lg:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
                         onClick={handleDownloadPdf}
                         disabled={isExporting || isGeneratingPdf || isGeneratingExcel}
                     >
@@ -866,7 +873,7 @@ const Transactions = () => {
                     </button>
 
                     <button
-                        className="flex items-center justify-center gap-2 bg-[#1D6F42] cursor-pointer text-white px-6 md:px-8 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-[#155330] hover:text-white hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        className="flex items-center justify-center gap-2 bg-[#1D6F42] cursor-pointer text-white px-4 sm:px-6 py-3 rounded-sm font-extrabold text-sm md:text-base uppercase tracking-wide transition-all duration-300 hover:bg-[#155330] hover:text-white hover:scale-105 hover:shadow-lg active:scale-95 whitespace-nowrap w-full lg:w-auto disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
                         onClick={handleDownloadExcel}
                         disabled={isExporting || isGeneratingPdf || isGeneratingExcel}
                     >
@@ -880,49 +887,65 @@ const Transactions = () => {
                 </div>
             </div>
 
-            {/* Summary cards */}
-            <div className="no-print max-w-full mx-auto px-4 md:px-3 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white rounded-xl shadow-md p-5 flex items-center justify-between border-r-4 border-green-500">
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">إجمالي الإيداعات (الصفحة الحالية)</p>
-                        <p className="text-2xl font-extrabold text-green-600 mt-1">{formatMoney(pageStats.totalDeposit)}</p>
-                    </div>
-                    <FaArrowTrendUp className="text-green-500" size="34" />
-                </div>
-                <div className="bg-white rounded-xl shadow-md p-5 flex items-center justify-between border-r-4 border-red-500">
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">إجمالي السحوبات (الصفحة الحالية)</p>
-                        <p className="text-2xl font-extrabold text-red-600 mt-1">{formatMoney(pageStats.totalWithdraw)}</p>
-                    </div>
-                    <FaArrowTrendDown className="text-red-500" size="34" />
-                </div>
-                <div className="bg-white rounded-xl shadow-md p-5 flex items-center justify-between border-r-4 border-[#a47d52]">
-                    <div>
-                        <p className="text-sm text-gray-500 font-medium">الرصيد (الصفحة الحالية)</p>
-                        <p className={`text-2xl font-extrabold mt-1 ${pageStats.balance >= 0 ? 'text-[#a47d52]' : 'text-red-600'}`}>
-                            {formatMoney(pageStats.balance)}
+            {/* ================= SUMMARY CARDS ================= */}
+            {/*
+              ✅ UPDATED: now shows GLOBAL totals (all pages from DB, honoring filters),
+              NOT just the current page.
+            */}
+            <div className="no-print max-w-full mx-auto px-4 md:px-3 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                <div className="bg-white rounded-xl shadow-md p-4 sm:p-5 flex items-center justify-between border-r-4 border-green-500">
+                    <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-500 font-medium truncate">
+                            إجمالي الإيداعات (كل الصفحات)
+                        </p>
+                        <p className="text-lg sm:text-2xl font-extrabold text-green-600 mt-1 break-all">
+                            {formatMoney(globalTotals.totalDeposit)}
                         </p>
                     </div>
-                    <FaScaleBalanced className="text-[#a47d52]" size="34" />
+                    <FaArrowTrendUp className="text-green-500 shrink-0" size="30" />
+                </div>
+
+                <div className="bg-white rounded-xl shadow-md p-4 sm:p-5 flex items-center justify-between border-r-4 border-red-500">
+                    <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-500 font-medium truncate">
+                            إجمالي السحوبات (كل الصفحات)
+                        </p>
+                        <p className="text-lg sm:text-2xl font-extrabold text-red-600 mt-1 break-all">
+                            {formatMoney(globalTotals.totalWithdraw)}
+                        </p>
+                    </div>
+                    <FaArrowTrendDown className="text-red-500 shrink-0" size="30" />
+                </div>
+
+                <div className="bg-white rounded-xl shadow-md p-4 sm:p-5 flex items-center justify-between border-r-4 border-[#a47d52]">
+                    <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-gray-500 font-medium truncate">
+                            الرصيد (كل الصفحات)
+                        </p>
+                        <p className={`text-lg sm:text-2xl font-extrabold mt-1 break-all ${globalTotals.balance >= 0 ? 'text-[#a47d52]' : 'text-red-600'}`}>
+                            {formatMoney(globalTotals.balance)}
+                        </p>
+                    </div>
+                    <FaScaleBalanced className="text-[#a47d52] shrink-0" size="30" />
                 </div>
             </div>
 
-            {/* Filters */}
+            {/* ================= FILTERS ================= */}
             <div className="no-print max-w-full mx-auto px-4 md:px-3 mb-6">
-                <div className="bg-white rounded-xl shadow-md p-4 flex flex-col md:flex-row gap-4 items-center">
+                <div className="bg-white rounded-xl shadow-md p-4 flex flex-col md:flex-row gap-3 md:gap-4 items-stretch md:items-center">
                     <div className="w-full md:w-1/3 relative">
                         <FaMagnifyingGlass className="absolute top-1/2 -translate-y-1/2 right-4 text-gray-400" />
                         <input
                             type="text"
-                            placeholder="بحث عن معاملة (رقم، بيان، رقم الشيك)..."
-                            className="w-full pr-10 pl-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a47d52] focus:border-transparent bg-white"
+                            placeholder="بحث عن معاملة..."
+                            className="w-full pr-10 pl-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a47d52] focus:border-transparent bg-white text-sm"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                     <div className="w-full md:w-1/5">
                         <select
-                            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a47d52] focus:border-transparent bg-white"
+                            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a47d52] focus:border-transparent bg-white text-sm"
                             value={filterType}
                             onChange={(e) => setFilterType(e.target.value)}
                         >
@@ -933,7 +956,7 @@ const Transactions = () => {
                     </div>
                     <div className="w-full md:w-1/5">
                         <select
-                            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a47d52] focus:border-transparent bg-white"
+                            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#a47d52] focus:border-transparent bg-white text-sm"
                             value={filterPaymentMethod}
                             onChange={(e) => setFilterPaymentMethod(e.target.value)}
                         >
@@ -942,7 +965,7 @@ const Transactions = () => {
                             <option value="cash">نقدي</option>
                         </select>
                     </div>
-                    <div className="w-full md:w-auto flex gap-3 items-center">
+                    <div className="w-full md:w-auto flex flex-wrap gap-2 sm:gap-3 items-center justify-between md:justify-start">
                         <span className="text-gray-600 text-sm whitespace-nowrap">
                             إجمالي: {totalCount} معاملة
                         </span>
@@ -963,14 +986,14 @@ const Transactions = () => {
                                 className="flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-600 text-sm hover:bg-gray-50 transition-colors duration-200"
                             >
                                 <FaRotateRight />
-                                إعادة تعيين
+                                <span className="hidden sm:inline">إعادة تعيين</span>
                             </button>
                         )}
                     </div>
                 </div>
             </div>
 
-            {/* Main Table */}
+            {/* ================= MAIN TABLE ================= */}
             <div className="no-print max-w-full mx-auto px-4 md:px-3">
                 <div className="bg-white rounded-xl shadow-lg overflow-hidden">
                     {loading ? (
@@ -986,20 +1009,20 @@ const Transactions = () => {
                     ) : (
                         <>
                             <div className="overflow-x-auto">
-                                <table className="w-full">
+                                <table className="w-full min-w-[900px]">
                                     <thead className="bg-[#e9e6e1] text-[#a47d52] sticky top-0 z-10">
                                         <tr>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">#</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">رقم المعاملة</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">التاريخ</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">النوع</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">طريقة الدفع</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">من حساب</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">الى حساب</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">المستلم / المُسلِّم</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">المبلغ</th>
-                                            <th className="px-6 py-4 text-right text-sm font-bold">البيان</th>
-                                            <th className="px-6 py-4 text-center text-sm font-bold">الإجراءات</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">#</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">رقم المعاملة</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">التاريخ</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">النوع</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">طريقة الدفع</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">من حساب</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">الى حساب</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">المستلم / المُسلِّم</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">المبلغ</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-bold">البيان</th>
+                                            <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-bold">الإجراءات</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1008,60 +1031,58 @@ const Transactions = () => {
                                                 key={transaction.id}
                                                 className="border-b border-gray-200 odd:bg-white even:bg-gray-50 hover:bg-[#f8f2e7] transition-colors duration-200"
                                             >
-                                                <td className="px-6 py-4 text-right text-sm text-gray-700">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm text-gray-700">
                                                     {(currentPage - 1) * pageSize + index + 1}
                                                 </td>
-                                                <td className="px-6 py-4 text-right text-sm font-medium text-gray-800">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-medium text-gray-800">
                                                     {transaction.transaction_no}
                                                 </td>
-                                                {/* ✅ UPDATED: date cell forced LTR so DD/Mon/YYYY reads left-to-right inside RTL table */}
-                                                <td className="px-6 py-4 text-right text-sm text-gray-700" dir="ltr">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm text-gray-700" dir="ltr">
                                                     {formatDate(transaction.transaction_date)}
                                                 </td>
-                                                <td className="px-6 py-4 text-right text-sm">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm">
                                                     {getTypeBadge(transaction.type)}
                                                 </td>
-                                                <td className="px-6 py-4 text-right text-sm">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm">
                                                     {getPaymentMethodBadge(transaction.payment_method)}
                                                 </td>
-                                                <td className="px-6 py-4 text-right text-sm">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm">
                                                     {renderAccountValue(transaction.account_from)}
                                                 </td>
-                                                <td className="px-6 py-4 text-right text-sm">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm">
                                                     {transaction.account_to}
                                                 </td>
-                                                <td className="px-6 py-4 text-right text-sm">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm">
                                                     {getPersonDisplay(transaction)}
                                                 </td>
-                                                <td className="px-6 py-4 text-right text-sm">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm">
                                                     {getAmountDisplay(transaction)}
                                                 </td>
-                                                <td className="px-6 py-4 text-right text-sm text-gray-700 max-w-[150px] truncate" title={transaction.statement || ''}>
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm text-gray-700 max-w-[150px] truncate" title={transaction.statement || ''}>
                                                     {transaction.statement || '-'}
                                                 </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <div className="flex justify-center gap-2">
+                                                <td className="px-3 sm:px-6 py-3 sm:py-4 text-center">
+                                                    <div className="flex justify-center gap-1 sm:gap-2">
                                                         <button
                                                             onClick={() => handleUpdate(transaction)}
-                                                            className="cursor-pointer px-2 py-2 bg-white text-white rounded-lg text-sm font-semibold transition-all duration-200 hover:scale-105"
+                                                            className="cursor-pointer p-1.5 sm:p-2 bg-white rounded-lg transition-all duration-200 hover:scale-105"
                                                             title="توقيع"
                                                         >
-                                                            <FaFileSignature className="text-[#a47d52]" size="22" />
+                                                            <FaFileSignature className="text-[#a47d52]" size="18" />
                                                         </button>
                                                         <button
                                                             onClick={() => handleViewTransaction(transaction.id)}
-                                                            className="cursor-pointer px-2 py-2 bg-white text-white rounded-lg text-sm font-semibold transition-all duration-200 hover:scale-105"
+                                                            className="cursor-pointer p-1.5 sm:p-2 bg-white rounded-lg transition-all duration-200 hover:scale-105"
                                                             title="عرض"
                                                         >
-                                                            <BiSolidShow className='text-green-600' size='22' />
+                                                            <BiSolidShow className='text-green-600' size='18' />
                                                         </button>
-                                                        
                                                         <button
                                                             onClick={() => handleDelete(transaction.id)}
-                                                            className="cursor-pointer px-2 py-2 bg-white text-white rounded-lg text-sm font-semibold transition-all duration-200 hover:scale-105"
+                                                            className="cursor-pointer p-1.5 sm:p-2 bg-white rounded-lg transition-all duration-200 hover:scale-105"
                                                             title="حذف"
                                                         >
-                                                            <MdDeleteForever className="text-red-600" size="22" />
+                                                            <MdDeleteForever className="text-red-600" size="18" />
                                                         </button>
                                                     </div>
                                                 </td>
@@ -1069,26 +1090,18 @@ const Transactions = () => {
                                         ))}
                                     </tbody>
 
-                                    {/*
-                                        Table Footer with Totals (current page) — a single row,
-                                        matching the light-gold (#FFE699) totals row used in the
-                                        PDF export and the .xlsx worksheet: a label spanning the
-                                        descriptive columns, then the deposit / withdraw / balance
-                                        sums sitting under the same column positions the PDF uses
-                                        for Income / Expense / Balance (columns 9, 10, 11).
-                                    */}
                                     <tfoot>
                                         <tr className="bg-[#e6d5c0] border-t-2 border-[#BF9000]">
-                                            <td colSpan="8" className="px-6 py-4 text-right text-sm font-extrabold text-gray-900">
-                                                الإجمالي الكلي — Gross Total
+                                            <td colSpan="8" className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-extrabold text-gray-900">
+                                                الإجمالي الكلي — الصفحة الحالية
                                             </td>
-                                            <td className="px-6 py-4 text-right text-sm font-extrabold text-green-700">
+                                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-extrabold text-green-700">
                                                 {formatMoney(pageStats.totalDeposit)}
                                             </td>
-                                            <td className="px-6 py-4 text-right text-sm font-extrabold text-red-700">
+                                            <td className="px-3 sm:px-6 py-3 sm:py-4 text-right text-xs sm:text-sm font-extrabold text-red-700">
                                                 {formatMoney(pageStats.totalWithdraw)}
                                             </td>
-                                            <td className={`px-6 py-4 text-center text-sm font-extrabold ${pageStats.balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                            <td className={`px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-extrabold ${pageStats.balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                                                 {formatMoney(pageStats.balance)}
                                             </td>
                                         </tr>
@@ -1096,10 +1109,9 @@ const Transactions = () => {
                                 </table>
                             </div>
 
-                            {/* Pagination */}
-                            <div className="px-6 py-4 border-t border-gray-200">
+                            <div className="px-3 sm:px-6 py-4 border-t border-gray-200">
                                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                                    <div className="text-sm text-gray-600">
+                                    <div className="text-xs sm:text-sm text-gray-600 text-center sm:text-right">
                                         عرض {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)} من {totalCount} معاملة
                                     </div>
                                     {renderPagination()}
@@ -1109,30 +1121,22 @@ const Transactions = () => {
                     )}
                 </div>
             </div>
-            
 
-            {/* ================= PRINT / PDF VIEW — styled to match the Accounting Worksheet .xlsx ================= */}
+            {/* ================= PRINT / PDF VIEW (unchanged) ================= */}
             <div className="print-area">
-                {/* Title bar — white background, bold black text, matches xlsx row 1 */}
-                <table dir="ltr" 
+                <table dir="ltr"
                     style={{ direction: 'ltr', width: '100%', borderCollapse: 'collapse', fontFamily: 'Calibri, Arial, sans-serif' }}>
                     <thead>
-                        {/* Line 1 — logo only */}
                         <tr>
                             <th colSpan={11} style={{ padding: '10px 6px 4px', border: '1px solid #000', borderBottom: 'none', background: '#FFFFFF' }}>
                                 <div style={{ display: 'flex', justifyContent: 'center' }}>
-                                    <img src={logogo} alt="logo" 
-                                        style={{ height: 72, width: 64, objectFit: 'cover', borderRadius: '50%',}} 
-                                        className='object-contain
-                                        scale-[2.5]
-                                        transform-gpu
-                                        my-2
-                                        '
+                                    <img src={logogo} alt="logo"
+                                        style={{ height: 72, width: 64, objectFit: 'cover', borderRadius: '50%' }}
+                                        className='object-contain scale-[2.5] transform-gpu my-2'
                                         />
                                 </div>
                             </th>
                         </tr>
-                        {/* Line 2 — headers/title text, underneath the logo */}
                         <tr>
                             <th colSpan={11} style={{ padding: '4px 6px 10px', border: '1px solid #000', borderTop: 'none', background: '#FFFFFF' }}>
                                 <div style={{ textAlign: 'center' }}>
@@ -1148,18 +1152,14 @@ const Transactions = () => {
                                 </div>
                             </th>
                         </tr>
-                        {/* Column headers — dark gold #BF9000 fill, bold black text, matches xlsx row 2 */}
-                        {/* <tr style={{ background: '#BF9000' }}> */}
-                        <tr className = 'bg-[#e6d5c0]'>
+                        <tr className='bg-[#e6d5c0]'>
                             <th style={thStyle}>Serial No.{'\n'}الرقم التسلسلي</th>
                             <th style={thStyle}>Date{'\n'}التاريخ</th>
                             <th style={thStyle}>Voucher No.{'\n'}رقم السند</th>
                             <th style={thStyle}>Inv / Receipt No.{'\n'}رقم الفاتوره / الايصال</th>
                             <th style={thStyle}>Recipient / Deliverer{'\n'}المستلم / المستفيد</th>
                             <th style={thStyle}>Description{'\n'}البيان</th>
-                            
                             <th style={thStyle}>To Account{'\n'}تم التحويل الى حساب</th>
-                            
                             <th style={thStyle}>Income{'\n'}الدخل</th>
                             <th style={thStyle}>Expense{'\n'}المصروف</th>
                             <th style={thStyle}>Balance{'\n'}الرصيد</th>
@@ -1169,16 +1169,12 @@ const Transactions = () => {
                         {printRows.map((t, index) => (
                             <tr key={t.id} style={{ background: index % 2 === 0 ? '#FFFFFF' : '#FAF7F0' }}>
                                 <td style={tdStyle}>{index + 1}</td>
-                                {/* ✅ UPDATED: date cell forced LTR in print/PDF too */}
                                 <td style={tdStyle} dir="ltr">{formatDate(t.transaction_date)}</td>
                                 <td style={tdStyle}>{t.transaction_no}</td>
-                                 <td style={tdStyle}>{t.document_no}</td>
+                                <td style={tdStyle}>{t.document_no}</td>
                                 <td style={tdStyle}>{t.type === 'withdraw' ? (t.person_receipt || '-') : (t.person_deliver || '-')}</td>
                                 <td style={{ ...tdStyle, textAlign: 'right', maxWidth: 220 }}>{t.statement || '-'}</td>
-                                
                                 <td style={tdStyle}>{t.account_to || '-'}</td>
-                                {/* <td style={tdStyle}>{t.payment_method === 'banks' ? 'بنوك' : t.payment_method === 'cash' ? 'نقدي' : (t.payment_method || '-')}</td>
-                                 */}
                                 <td style={{ ...tdStyle, color: '#1a7a1a', fontWeight: 700 }}>{t.type === 'deposit' ? formatMoney(t.amount) : ''}</td>
                                 <td style={{ ...tdStyle, color: '#b30000', fontWeight: 700 }}>{t.type === 'withdraw' ? formatMoney(t.amount) : ''}</td>
                                 <td style={{ ...tdStyle, fontWeight: 700 }}>{formatMoney(t.runningBalance)}</td>
@@ -1186,13 +1182,6 @@ const Transactions = () => {
                         ))}
                     </tbody>
                     <tfoot>
-                        {/*
-                            Totals row — light gold #FFE699 fill, bold black text, matches xlsx row 73.
-                            One label spans columns 1-8, then the Income / Expense / Balance sums sit
-                            under their own columns (9 / 10 / 11) — same layout the table footer above
-                            and the Excel export both use, so all three stay visually consistent.
-                        */}
-                        {/* <tr style={{ background: '#FFE699' }}> */}
                         <tr className="bg-[#e6d5c0] border-t-2 border-[#BF9000]">
                             <td colSpan={7} style={{ ...tdStyle, fontWeight: 800, textAlign: 'right' }}>
                                 Gross Total — المجموع الكلي
@@ -1205,22 +1194,17 @@ const Transactions = () => {
                 </table>
             </div>
 
-            {/* ===== MODALS - All modals rendered here ===== */}
+            {/* ================= MODALS ================= */}
 
-            {/* Transaction Details Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 overflow-y-auto no-print">
-                    {/* Backdrop with blur effect */}
                     <div
                         className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
                         onClick={handleCloseModal}
                     ></div>
 
-                    {/* Modal Content */}
                     <div className="flex min-h-full items-center justify-center p-4">
                         <div className="relative rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-y-auto bg-[#f8f7f5]">
-
-                            {/* Close Button */}
                             <button
                                 onClick={handleCloseModal}
                                 className="sticky top-4 float-end z-10 p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors duration-200 m-4"
@@ -1231,7 +1215,6 @@ const Transactions = () => {
                                 </svg>
                             </button>
 
-                            {/* Transaction Details */}
                             <TransactionDetails
                                 transactionId={selectedTransactionId}
                                 onClose={handleCloseModal}
@@ -1241,7 +1224,6 @@ const Transactions = () => {
                 </div>
             )}
 
-            {/* Deposit Modal */}
             {showAddDepositModal && (
                 <div className="fixed inset-0 z-50 overflow-y-auto no-print">
                     <div className="flex min-h-full items-center justify-center p-4">
@@ -1257,7 +1239,6 @@ const Transactions = () => {
                 </div>
             )}
 
-            {/* Withdraw Modal */}
             {showAddWithdrawModal && (
                 <div className="fixed inset-0 z-50 overflow-y-auto no-print">
                     <div className="flex min-h-full items-center justify-center p-4">
@@ -1276,7 +1257,6 @@ const Transactions = () => {
     );
 };
 
-// Shared inline styles for the print table (kept out of Tailwind so colors survive printing)
 const thStyle = {
     border: '1px solid #000',
     padding: '8px 6px',
@@ -1297,6 +1277,8 @@ const tdStyle = {
 
 export default Transactions;
 
+
+
 // import React, { useState, useEffect, useMemo } from 'react';
 // import { toast, ToastContainer } from 'react-toastify';
 // import 'react-toastify/dist/ReactToastify.css';
@@ -1314,6 +1296,7 @@ export default Transactions;
 //     FaRotateRight,
 //     FaMagnifyingGlass,
 // } from "react-icons/fa6";
+
 // import { FaFileSignature } from "react-icons/fa6";
 
 // import html2canvas from 'html2canvas';
@@ -1344,10 +1327,31 @@ export default Transactions;
 // const formatMoney = (value) =>
 //     (parseFloat(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// // ✅ UPDATED: Date format is now DD/Mon/YYYY (e.g. 21/Sep/2026)
+// // This single helper is used by:
+// //   - the on-screen table
+// //   - the print / PDF worksheet (print-area)
+// //   - the Excel export (generateExcel)
+// // so all three stay consistent.
+// // The direction (LTR) is enforced at the render site with dir="ltr",
+// // so the text always reads left-to-right even inside the RTL layout.
 // const formatDate = (value) => {
 //     if (!value) return '-';
 //     try {
-//         return new Date(value).toLocaleDateString('ar-EG');
+//         const d = new Date(value);
+//         if (isNaN(d.getTime())) return value;
+
+//         const day = String(d.getDate()).padStart(2, '0');
+
+//         // English 3-letter month abbreviations (Jan, Feb, ... Dec)
+//         const monthNames = [
+//             'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+//             'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+//         ];
+//         const month = monthNames[d.getMonth()];
+
+//         const year = d.getFullYear(); // full 4-digit year
+//         return `${day}/${month}/${year}`;
 //     } catch {
 //         return value;
 //     }
@@ -1438,14 +1442,24 @@ export default Transactions;
 
 //             const data = await response.json();
 
+//             // ✅ VERIFIED DESC SORT:
+//             // We sort by `transaction_date` DESC (newest first). If two rows share the
+//             // same date we fall back to `id` DESC so the last inserted row always wins.
+//             const sortDesc = (rows) =>
+//                 [...rows].sort((a, b) => {
+//                     const diff = new Date(b.transaction_date) - new Date(a.transaction_date);
+//                     if (diff !== 0) return diff;
+//                     return (b.id || 0) - (a.id || 0); // tie-breaker: newest id first
+//                 });
+
 //             if (data && data.results && Array.isArray(data.results)) {
-//                 setTransactions(data.results);
+//                 setTransactions(sortDesc(data.results));
 //                 setTotalCount(data.count || 0);
 //                 setTotalPages(Math.ceil((data.count || 0) / pageSize));
 //                 setNextPage(data.next);
 //                 setPreviousPage(data.previous);
 //             } else if (data && Array.isArray(data)) {
-//                 setTransactions(data);
+//                 setTransactions(sortDesc(data));
 //                 setTotalCount(data.length);
 //                 setTotalPages(Math.ceil(data.length / pageSize));
 //                 setNextPage(null);
@@ -1690,344 +1704,181 @@ export default Transactions;
 
 //     // Builds a styled .xlsx workbook — same columns, same colors (#BF9000 header / #FFE699
 //     // totals), same logo and layout as the printed worksheet / PDF export.
-// //     const generateExcel = async () => {
-// //         try {
-// //             setIsGeneratingExcel(true);
-
-// //             const workbook = new ExcelJS.Workbook();
-// //             workbook.creator = COMPANY_NAME_EN;
-// //             workbook.created = new Date();
-
-// //             const sheet = workbook.addWorksheet('Transactions', {
-// //                 views: [{ rightToLeft: false }],
-// //                 pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-// //             });
-
-// //             const columnWidths = [10, 13, 16, 24, 34, 18, 18, 14, 14, 14, 16];
-// //             sheet.columns = columnWidths.map((width) => ({ width }));
-// //             const columnCount = columnWidths.length;
-
-// //             const thinBorder = {
-// //                 top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-// //                 left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-// //                 bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-// //                 right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-// //             };
-
-// //             // Row 1 — title, merged across every column, white background + bold black text
-// //             sheet.mergeCells(1, 1, 1, columnCount);
-// //             const titleRow = sheet.getRow(1);
-// //             titleRow.height = 56;
-// //             const titleCell = titleRow.getCell(1);
-// //             titleCell.value =
-// //                 `${COMPANY_NAME_EN} — ${COMPANY_NAME_AR}\n` +
-// //                 'Accounting Worksheet — ورقة عمل المحاسبة';
-// //             titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-// //             titleCell.font = { bold: true, size: 14, color: { argb: 'FF000000' } };
-// //             titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
-// //             titleCell.border = thinBorder;
-
-// //             // Best-effort logo embed in the top-left corner (falls back silently if it can't be fetched)
-// //             try {
-// //                 const logoResponse = await fetch(logogo);
-// //                 const logoBuffer = await logoResponse.arrayBuffer();
-// //                 const imageId = workbook.addImage({ buffer: logoBuffer, extension: 'jpeg' });
-// //                 sheet.addImage(imageId, {
-// //                     tl: { col: 0.1, row: 0.1 },
-// //                     ext: { width: 56, height: 56 },
-// //                 });
-// //             } catch (imgErr) {
-// //                 console.warn('Logo could not be embedded in the Excel file:', imgErr);
-// //             }
-
-// //             // Row 2 — column headers, dark gold fill (#BF9000) + bold black text
-// //             const headerRow = sheet.addRow([
-// //                 'Serial No.\nتسلسلي',
-// //                 'Date\nالتاريخ',
-// //                 'Voucher No.\nرقم السند',
-// //                 'Invoice/Receipt No\nرقم الفاتوره / الايصال',
-// //                 'Recipient / Beneficiary\nالمستلم / المستفيد',
-
-// //                 'Description\nالبيان',
-              
-// //                 'To Account Name\nتم التحويل الى  حساب',
-                
-// //                 'Income\nالدخل',
-// //                 'Expense\nالمصروف',
-// //                 'Balance\nالرصيد',
-// //             ]);
-// //             headerRow.height = 34;
-// //             headerRow.eachCell((cell) => {
-// //                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBF9000' } };
-// //                 cell.font = { bold: true, color: { argb: 'FF000000' } };
-// //                 cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-// //                 cell.border = thinBorder;
-// //             });
-
-// //             // Data rows — same running balance shown in the PDF/print worksheet
-// //             printRows.forEach((t, index) => {
-// //                 const row = sheet.addRow([
-// //                     index + 1,
-// //                     formatDate(t.transaction_date),
-// //                     t.transaction_no,
-// //                     t.document_no,
-// //                     t.type === 'withdraw' ? (t.person_receipt || '-') : (t.person_deliver || '-'),
-// //                     t.statement || '-',
-                   
-// //                     t.account_to || '-',
-// //                     // t.payment_method === 'banks' ? 'بنوك' : t.payment_method === 'cash' ? 'نقدي' : (t.payment_method || '-'),
-                   
-// //                     t.type === 'deposit' ? parseFloat(t.amount) || 0 : null,
-// //                     t.type === 'withdraw' ? parseFloat(t.amount) || 0 : null,
-// //                     t.runningBalance,
-// //                 ]);
-
-// //                 const zebraFill = index % 2 === 0 ? 'FFFFFFFF' : 'FFFAF7F0';
-// //                 row.eachCell((cell, colNumber) => {
-// //                     cell.border = thinBorder;
-// //                     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: colNumber === 5 };
-// //                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: zebraFill } };
-// //                     if (colNumber === 9 || colNumber === 10 || colNumber === 11) {
-// //                         cell.numFmt = '#,##0.00';
-// //                     }
-// //                 });
-// //                 row.getCell(9).font = { bold: true, color: { argb: 'FF1A7A1A' } }; // Income — green
-// //                 row.getCell(10).font = { bold: true, color: { argb: 'FFB30000' } }; // Expense — red
-// //                 row.getCell(11).font = { bold: true, color: { argb: 'FF000000' } }; // Balance
-// //             });
-
-// //             // Totals row — light gold fill (#FFE699) + bold black text, matches the .xlsx worksheet
-// //             // AND the print/PDF footer: one label spanning columns 1-8, then Income / Expense /
-// //             // Balance sums sitting under their own columns (9 / 10 / 11).
-// //             // const totalsRow = sheet.addRow([
-// //             //     '', '', '', '', '', '','',
-// //             //     'Gross Total — المجموع الكلي',
-// //             //     printTotals.totalIncome,
-// //             //     printTotals.totalExpense,
-// //             //     printTotals.balance,
-// //             // ]);
-// //             const totalsRow = sheet.addRow([
-// //     '',                           // 1 — Serial No.
-// //     '',                           // 2 — Date
-// //     '',                           // 3 — Voucher No.
-// //     '',                           // 4 — Invoice/Receipt No
-// //     '',                           // 5 — Recipient / Beneficiary
-// //     '',                           // 6 — Description
-// //     'Gross Total — المجموع الكلي', // 7 — To Account Name (used as label column)
-// //     printTotals.totalIncome,      // 8 — Income
-// //     printTotals.totalExpense,     // 9 — Expense
-// //     printTotals.balance,          // 10 — Balance
-// // ]);
-
-// // // Merge columns 1–7 so the label spans the descriptive area
-// // sheet.mergeCells(totalsRow.number, 1, totalsRow.number, 7);
-
-// //             sheet.mergeCells(totalsRow.number, 1, totalsRow.number, 8);
-// //             totalsRow.eachCell((cell, colNumber) => {
-// //                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE699' } };
-// //                 cell.font = { bold: true, color: { argb: 'FF000000' } };
-// //                 cell.border = thinBorder;
-// //                 cell.alignment = { horizontal: colNumber === 1 ? 'right' : 'center', vertical: 'middle' };
-// //                 if (colNumber === 9 || colNumber === 10 || colNumber === 11) {
-// //                     cell.numFmt = '#,##0.00';
-// //                 }
-// //             });
-
-// //             const buffer = await workbook.xlsx.writeBuffer();
-// //             const blob = new Blob([buffer], {
-// //                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-// //             });
-// //             const url = URL.createObjectURL(blob);
-// //             const link = document.createElement('a');
-// //             link.href = url;
-// //             link.download = `Broker_City_Transactions_${new Date().toISOString().slice(0, 10)}.xlsx`;
-// //             document.body.appendChild(link);
-// //             link.click();
-// //             document.body.removeChild(link);
-// //             URL.revokeObjectURL(url);
-// //         } catch (err) {
-// //             console.error('Error generating Excel file:', err);
-// //             toast.error('❌ تعذر إنشاء ملف Excel');
-// //         } finally {
-// //             setIsGeneratingExcel(false);
-// //         }
-// //     };
-
 //     const generateExcel = async () => {
-//     try {
-//         setIsGeneratingExcel(true);
-
-//         const workbook = new ExcelJS.Workbook();
-//         workbook.creator = COMPANY_NAME_EN;
-//         workbook.created = new Date();
-
-//         const sheet = workbook.addWorksheet('Transactions', {
-//             views: [{ rightToLeft: false }],
-//             pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-//         });
-
-//         // ✅ FIX 1: 10 columns only (matches the 10 header names)
-//         // Order: S | Date | Voucher No. | Invoice No. | Recipient | Description | To Account | Income | Expense | Balance
-//         const columnWidths = [10, 13, 16, 24, 34, 18, 18, 14, 14, 16];
-//         sheet.columns = columnWidths.map((width) => ({ width }));
-//         const columnCount = columnWidths.length; // = 10
-
-//         const thinBorder = {
-//             top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-//             left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-//             bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-//             right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
-//         };
-
-//         // ============================================================
-//         // ROW 1 — Title (merged across all 10 columns)
-//         // ============================================================
-//         sheet.mergeCells(1, 1, 1, columnCount);
-//         const titleRow = sheet.getRow(1);
-//         titleRow.height = 56;
-//         const titleCell = titleRow.getCell(1);
-//         titleCell.value =
-//             `${COMPANY_NAME_EN} — ${COMPANY_NAME_AR}\n` +
-//             'Accounting Worksheet — ورقة عمل المحاسبة';
-//         titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-//         titleCell.font = { bold: true, size: 14, color: { argb: 'FF000000' } };
-//         titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
-//         titleCell.border = thinBorder;
-
-//         // Logo (best-effort)
 //         try {
-//             const logoResponse = await fetch(logogo);
-//             const logoBuffer = await logoResponse.arrayBuffer();
-//             const imageId = workbook.addImage({ buffer: logoBuffer, extension: 'jpeg' });
-//             sheet.addImage(imageId, {
-//                 tl: { col: 0.1, row: 0.1 },
-//                 ext: { width: 56, height: 56 },
+//             setIsGeneratingExcel(true);
+
+//             const workbook = new ExcelJS.Workbook();
+//             workbook.creator = COMPANY_NAME_EN;
+//             workbook.created = new Date();
+
+//             const sheet = workbook.addWorksheet('Transactions', {
+//                 views: [{ rightToLeft: false }],
+//                 pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
 //             });
-//         } catch (imgErr) {
-//             console.warn('Logo could not be embedded in the Excel file:', imgErr);
-//         }
 
-//         // ============================================================
-//         // ROW 2 — Header (10 columns, dark gold #BF9000)
-//         // ============================================================
-//         const headerRow = sheet.addRow([
-//             'Serial No.\nتسلسلي',                            // 1
-//             'Date\nالتاريخ',                                  // 2
-//             'Voucher No.\nرقم السند',                         // 3
-//             'Invoice/Receipt No\nرقم الفاتوره / الايصال',     // 4
-//             'Recipient / Beneficiary\nالمستلم / المستفيد',   // 5
-//             'Description\nالبيان',                            // 6
-//             'To Account Name\nتم التحويل الى حساب',           // 7
-//             'Income\nالدخل',                                  // 8
-//             'Expense\nالمصروف',                               // 9
-//             'Balance\nالرصيد',                                // 10
-//         ]);
-//         headerRow.height = 34;
-//         headerRow.eachCell((cell) => {
-//             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBF9000' } };
-//             cell.font = { bold: true, color: { argb: 'FF000000' } };
-//             cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-//             cell.border = thinBorder;
-//         });
+//             // ✅ 10 columns only (matches the 10 header names)
+//             // Order: S | Date | Voucher No. | Invoice No. | Recipient | Description | To Account | Income | Expense | Balance
+//             const columnWidths = [10, 13, 16, 24, 34, 18, 18, 14, 14, 16];
+//             sheet.columns = columnWidths.map((width) => ({ width }));
+//             const columnCount = columnWidths.length; // = 10
 
-//         // ============================================================
-//         // DATA ROWS — 10 values per row (columns 8/9/10 = Income/Expense/Balance)
-//         // ============================================================
-//         printRows.forEach((t, index) => {
-//             const row = sheet.addRow([
-//                 index + 1,                                                             // 1
-//                 formatDate(t.transaction_date),                                        // 2
-//                 t.transaction_no,                                                      // 3
-//                 t.document_no || '-',                                                  // 4
-//                 t.type === 'withdraw'                                                  // 5
-//                     ? (t.person_receipt || '-')
-//                     : (t.person_deliver || '-'),
-//                 t.statement || '-',                                                    // 6
-//                 t.account_to || '-',                                                   // 7
-//                 t.type === 'deposit' ? (parseFloat(t.amount) || 0) : null,             // 8  Income
-//                 t.type === 'withdraw' ? (parseFloat(t.amount) || 0) : null,            // 9  Expense
-//                 t.runningBalance,                                                      // 10 Balance
+//             const thinBorder = {
+//                 top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+//                 left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+//                 bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+//                 right: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+//             };
+
+//             // ============================================================
+//             // ROW 1 — Title (merged across all 10 columns)
+//             // ============================================================
+//             sheet.mergeCells(1, 1, 1, columnCount);
+//             const titleRow = sheet.getRow(1);
+//             titleRow.height = 56;
+//             const titleCell = titleRow.getCell(1);
+//             titleCell.value =
+//                 `${COMPANY_NAME_EN} — ${COMPANY_NAME_AR}\n` +
+//                 'Accounting Worksheet — ورقة عمل المحاسبة';
+//             titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+//             titleCell.font = { bold: true, size: 14, color: { argb: 'FF000000' } };
+//             titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+//             titleCell.border = thinBorder;
+
+//             // Logo (best-effort)
+//             try {
+//                 const logoResponse = await fetch(logogo);
+//                 const logoBuffer = await logoResponse.arrayBuffer();
+//                 const imageId = workbook.addImage({ buffer: logoBuffer, extension: 'jpeg' });
+//                 sheet.addImage(imageId, {
+//                     tl: { col: 0.1, row: 0.1 },
+//                     ext: { width: 56, height: 56 },
+//                 });
+//             } catch (imgErr) {
+//                 console.warn('Logo could not be embedded in the Excel file:', imgErr);
+//             }
+
+//             // ============================================================
+//             // ROW 2 — Header (10 columns, dark gold #BF9000)
+//             // ============================================================
+//             const headerRow = sheet.addRow([
+//                 'Serial No.\nتسلسلي',                            // 1
+//                 'Date\nالتاريخ',                                  // 2
+//                 'Voucher No.\nرقم السند',                         // 3
+//                 'Invoice/Receipt No\nرقم الفاتوره / الايصال',     // 4
+//                 'Recipient / Beneficiary\nالمستلم / المستفيد',   // 5
+//                 'Description\nالبيان',                            // 6
+//                 'To Account Name\nتم التحويل الى حساب',           // 7
+//                 'Income\nالدخل',                                  // 8
+//                 'Expense\nالمصروف',                               // 9
+//                 'Balance\nالرصيد',                                // 10
+//             ]);
+//             headerRow.height = 34;
+//             headerRow.eachCell((cell) => {
+//                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBF9000' } };
+//                 cell.font = { bold: true, color: { argb: 'FF000000' } };
+//                 cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+//                 cell.border = thinBorder;
+//             });
+
+//             // ============================================================
+//             // DATA ROWS — 10 values per row (columns 8/9/10 = Income/Expense/Balance)
+//             // ============================================================
+//             printRows.forEach((t, index) => {
+//                 const row = sheet.addRow([
+//                     index + 1,                                                             // 1
+//                     formatDate(t.transaction_date),                                        // 2
+//                     t.transaction_no,                                                      // 3
+//                     t.document_no || '-',                                                  // 4
+//                     t.type === 'withdraw'                                                  // 5
+//                         ? (t.person_receipt || '-')
+//                         : (t.person_deliver || '-'),
+//                     t.statement || '-',                                                    // 6
+//                     t.account_to || '-',                                                   // 7
+//                     t.type === 'deposit' ? (parseFloat(t.amount) || 0) : null,             // 8  Income
+//                     t.type === 'withdraw' ? (parseFloat(t.amount) || 0) : null,            // 9  Expense
+//                     t.runningBalance,                                                      // 10 Balance
+//                 ]);
+
+//                 const zebraFill = index % 2 === 0 ? 'FFFFFFFF' : 'FFFAF7F0';
+
+//                 row.eachCell((cell, colNumber) => {
+//                     cell.border = thinBorder;
+//                     cell.alignment = {
+//                         horizontal: 'center',
+//                         vertical: 'middle',
+//                         wrapText: colNumber === 5 || colNumber === 6,
+//                     };
+//                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: zebraFill } };
+
+//                     // number format on columns 8, 9, 10 (Income, Expense, Balance)
+//                     if (colNumber === 8 || colNumber === 9 || colNumber === 10) {
+//                         cell.numFmt = '#,##0.00';
+//                     }
+//                 });
+
+//                 // colors on the correct columns
+//                 row.getCell(8).font = { bold: true, color: { argb: 'FF1A7A1A' } }; // Income — green
+//                 row.getCell(9).font = { bold: true, color: { argb: 'FFB30000' } }; // Expense — red
+//                 row.getCell(10).font = { bold: true, color: { argb: 'FF000000' } }; // Balance — black
+//             });
+
+//             // ============================================================
+//             // TOTALS ROW — 10 values, merge columns 1–7 for the label
+//             // ============================================================
+//             const totalsRow = sheet.addRow([
+//                 '',                            // 1
+//                 '',                            // 2
+//                 '',                            // 3
+//                 '',                            // 4
+//                 '',                            // 5
+//                 '',                            // 6
+//                 'Gross Total — المجموع الكلي',  // 7  (label starts here)
+//                 printTotals.totalIncome,       // 8  Income
+//                 printTotals.totalExpense,      // 9  Expense
+//                 printTotals.balance,           // 10 Balance
 //             ]);
 
-//             const zebraFill = index % 2 === 0 ? 'FFFFFFFF' : 'FFFAF7F0';
+//             // only ONE merge call — columns 1 through 7
+//             sheet.mergeCells(totalsRow.number, 1, totalsRow.number, 7);
 
-//             row.eachCell((cell, colNumber) => {
+//             totalsRow.eachCell((cell, colNumber) => {
+//                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE699' } };
+//                 cell.font = { bold: true, color: { argb: 'FF000000' } };
 //                 cell.border = thinBorder;
 //                 cell.alignment = {
-//                     horizontal: 'center',
+//                     horizontal: colNumber === 1 ? 'right' : 'center',
 //                     vertical: 'middle',
-//                     wrapText: colNumber === 5 || colNumber === 6,
 //                 };
-//                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: zebraFill } };
 
-//                 // ✅ FIX: number format on columns 8, 9, 10 (Income, Expense, Balance)
+//                 // number format on columns 8, 9, 10
 //                 if (colNumber === 8 || colNumber === 9 || colNumber === 10) {
 //                     cell.numFmt = '#,##0.00';
 //                 }
 //             });
 
-//             // ✅ FIX: colors on the correct columns
-//             row.getCell(8).font = { bold: true, color: { argb: 'FF1A7A1A' } }; // Income — green
-//             row.getCell(9).font = { bold: true, color: { argb: 'FFB30000' } }; // Expense — red
-//             row.getCell(10).font = { bold: true, color: { argb: 'FF000000' } }; // Balance — black
-//         });
-
-//         // ============================================================
-//         // TOTALS ROW — 10 values, merge columns 1–7 for the label
-//         // ============================================================
-//         const totalsRow = sheet.addRow([
-//             '',                            // 1
-//             '',                            // 2
-//             '',                            // 3
-//             '',                            // 4
-//             '',                            // 5
-//             '',                            // 6
-//             'Gross Total — المجموع الكلي',  // 7  (label starts here)
-//             printTotals.totalIncome,       // 8  Income
-//             printTotals.totalExpense,      // 9  Expense
-//             printTotals.balance,           // 10 Balance
-//         ]);
-
-//         // ✅ FIX: only ONE merge call — columns 1 through 7
-//         sheet.mergeCells(totalsRow.number, 1, totalsRow.number, 7);
-
-//         totalsRow.eachCell((cell, colNumber) => {
-//             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFE699' } };
-//             cell.font = { bold: true, color: { argb: 'FF000000' } };
-//             cell.border = thinBorder;
-//             cell.alignment = {
-//                 horizontal: colNumber === 1 ? 'right' : 'center',
-//                 vertical: 'middle',
-//             };
-
-//             // ✅ FIX: number format on columns 8, 9, 10
-//             if (colNumber === 8 || colNumber === 9 || colNumber === 10) {
-//                 cell.numFmt = '#,##0.00';
-//             }
-//         });
-
-//         // ============================================================
-//         // WRITE FILE
-//         // ============================================================
-//         const buffer = await workbook.xlsx.writeBuffer();
-//         const blob = new Blob([buffer], {
-//             type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-//         });
-//         const url = URL.createObjectURL(blob);
-//         const link = document.createElement('a');
-//         link.href = url;
-//         link.download = `Broker_City_Transactions_${new Date().toISOString().slice(0, 10)}.xlsx`;
-//         document.body.appendChild(link);
-//         link.click();
-//         document.body.removeChild(link);
-//         URL.revokeObjectURL(url);
-//     } catch (err) {
-//         console.error('Error generating Excel file:', err);
-//         toast.error('❌ تعذر إنشاء ملف Excel');
-//     } finally {
-//         setIsGeneratingExcel(false);
-//     }
-// };
+//             // ============================================================
+//             // WRITE FILE
+//             // ============================================================
+//             const buffer = await workbook.xlsx.writeBuffer();
+//             const blob = new Blob([buffer], {
+//                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+//             });
+//             const url = URL.createObjectURL(blob);
+//             const link = document.createElement('a');
+//             link.href = url;
+//             link.download = `Broker_City_Transactions_${new Date().toISOString().slice(0, 10)}.xlsx`;
+//             document.body.appendChild(link);
+//             link.click();
+//             document.body.removeChild(link);
+//             URL.revokeObjectURL(url);
+//         } catch (err) {
+//             console.error('Error generating Excel file:', err);
+//             toast.error('❌ تعذر إنشاء ملف Excel');
+//         } finally {
+//             setIsGeneratingExcel(false);
+//         }
+//     };
 
 
 
@@ -2444,7 +2295,8 @@ export default Transactions;
 //                                                 <td className="px-6 py-4 text-right text-sm font-medium text-gray-800">
 //                                                     {transaction.transaction_no}
 //                                                 </td>
-//                                                 <td className="px-6 py-4 text-right text-sm text-gray-700">
+//                                                 {/* ✅ UPDATED: date cell forced LTR so DD/Mon/YYYY reads left-to-right inside RTL table */}
+//                                                 <td className="px-6 py-4 text-right text-sm text-gray-700" dir="ltr">
 //                                                     {formatDate(transaction.transaction_date)}
 //                                                 </td>
 //                                                 <td className="px-6 py-4 text-right text-sm">
@@ -2538,7 +2390,7 @@ export default Transactions;
 //                     )}
 //                 </div>
 //             </div>
-
+            
 
 //             {/* ================= PRINT / PDF VIEW — styled to match the Accounting Worksheet .xlsx ================= */}
 //             <div className="print-area">
@@ -2598,7 +2450,8 @@ export default Transactions;
 //                         {printRows.map((t, index) => (
 //                             <tr key={t.id} style={{ background: index % 2 === 0 ? '#FFFFFF' : '#FAF7F0' }}>
 //                                 <td style={tdStyle}>{index + 1}</td>
-//                                 <td style={tdStyle}>{formatDate(t.transaction_date)}</td>
+//                                 {/* ✅ UPDATED: date cell forced LTR in print/PDF too */}
+//                                 <td style={tdStyle} dir="ltr">{formatDate(t.transaction_date)}</td>
 //                                 <td style={tdStyle}>{t.transaction_no}</td>
 //                                  <td style={tdStyle}>{t.document_no}</td>
 //                                 <td style={tdStyle}>{t.type === 'withdraw' ? (t.person_receipt || '-') : (t.person_deliver || '-')}</td>
@@ -2724,5 +2577,6 @@ export default Transactions;
 // };
 
 // export default Transactions;
+
 
 

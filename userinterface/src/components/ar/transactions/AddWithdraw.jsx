@@ -1,14 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
-import { FaSave, FaUniversity, FaMoneyBillWave, FaCheck, FaUpload, FaSignature } from 'react-icons/fa';
+import {
+    FaSave,
+    FaUniversity,
+    FaMoneyBillWave,
+    FaCheck,
+    FaUpload,
+    FaSignature,
+    FaEraser
+} from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
+import SignatureCanvas from 'react-signature-canvas';
 import { formatAmountInWords } from '../../../utils/numberToArabic';
 import VoucherWithdraw from './VoucherWithdraw';
 
-
 const BASE = import.meta.env.VITE_DJANGO_BASE_URL;
 
-const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditMode: initialEditMode }) => {
+const AddWithdraw = ({
+    onClose,
+    transactionData,
+    onSuccess,
+    initialData,
+    isEditMode: initialEditMode
+}) => {
 
     // =========================================================
     // VOUCHER
@@ -27,6 +41,9 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
     const [errors, setErrors] = useState({});
     const [isDataLoaded, setIsDataLoaded] = useState(false);
 
+    // =========================================================
+    // REFS
+    // =========================================================
     const accountFromRef = useRef(null);
     const accountToRef = useRef(null);
     const amountRef = useRef(null);
@@ -41,6 +58,8 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
     const currencyRef = useRef(null);
     const transactionNoRef = useRef(null);
     const transactionDateRef = useRef(null);
+
+    // 👇 Signature canvas refs
     const userSignatureRef = useRef(null);
     const managerSignatureRef = useRef(null);
     const secondPersonSignatureRef = useRef(null);
@@ -232,6 +251,33 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
 
     const initialDataId = initialData?.id ?? null;
 
+    // =========================================================
+    // LOAD EXISTING SIGNATURE INTO CANVAS
+    // =========================================================
+    const loadSignatureIntoCanvas = (canvasRef, dataUrl) => {
+        if (!canvasRef?.current || !dataUrl) return;
+
+        try {
+            const canvas = canvasRef.current.getCanvas();
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = () => {
+                const ratio = Math.min(
+                    canvas.width / img.width,
+                    canvas.height / img.height
+                );
+                const newWidth = img.width * ratio;
+                const newHeight = img.height * ratio;
+                const x = (canvas.width - newWidth) / 2;
+                const y = (canvas.height - newHeight) / 2;
+                ctx.drawImage(img, x, y, newWidth, newHeight);
+            };
+            img.src = dataUrl;
+        } catch (err) {
+            console.warn('Failed to load signature into canvas:', err);
+        }
+    };
+
     useEffect(() => {
         let cancelled = false;
 
@@ -324,6 +370,19 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
                 } else {
                     setPaymentMethod(null);
                 }
+
+                // 👇 Load existing signatures into canvases after DOM is ready
+                setTimeout(() => {
+                    if (initialData.user_signature) {
+                        loadSignatureIntoCanvas(userSignatureRef, initialData.user_signature);
+                    }
+                    if (initialData.manager_signature) {
+                        loadSignatureIntoCanvas(managerSignatureRef, initialData.manager_signature);
+                    }
+                    if (initialData.second_person_signature) {
+                        loadSignatureIntoCanvas(secondPersonSignatureRef, initialData.second_person_signature);
+                    }
+                }, 200);
             }
 
             if (!cancelled) {
@@ -375,6 +434,30 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
         }
     };
 
+    // =========================================================
+    // SIGNATURE HELPERS
+    // =========================================================
+    const clearSignature = (canvasRef) => {
+        if (canvasRef?.current) {
+            canvasRef.current.clear();
+        }
+    };
+
+    /**
+     * ✅ FIX: use getCanvas() instead of getTrimmedCanvas()
+     * to avoid Vite ESM/CJS interop error from `trim-canvas`.
+     */
+    const getSignatureData = (canvasRef) => {
+        if (!canvasRef?.current) return '';
+        try {
+            if (canvasRef.current.isEmpty()) return '';
+            return canvasRef.current.getCanvas().toDataURL('image/png');
+        } catch (err) {
+            console.error('Error getting signature data:', err);
+            return '';
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -389,12 +472,13 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
             }
 
             const newErrors = {};
+
             // ===== SWAPPED: validate account_to (which is now the source) =====
             if (!formData.account_to) {
                 newErrors.account_to = 'يرجى اختيار الحساب المصدر';
             }
             if (!formData.amount || parseFloat(formData.amount) <= 0) {
-                newErrors.amount = 'يرجى إدخال مبلغ صحيح';
+                newErrors.amount = 'يرجى إدخال مبلغ صحيح أكبر من صفر';
             }
             if (!formData.statement || formData.statement.trim() === '') {
                 newErrors.statement = 'يرجى إدخال البيان';
@@ -408,13 +492,51 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
             if (paymentMethod === 'cash' && !formData.cashbox) {
                 newErrors.cashbox = 'يرجى اختيار الخزينة النقدية';
             }
+            if (!formData.transaction_date) {
+                newErrors.transaction_date = 'يرجى إدخال تاريخ المعاملة';
+            }
+            if (!formData.currency) {
+                newErrors.currency = 'يرجى اختيار العملة';
+            }
 
             if (Object.keys(newErrors).length > 0) {
                 setErrors(newErrors);
-                toast.error('يرجى تصحيح الأخطاء في النموذج');
+
+                // ✅ Show the specific Arabic messages in the toast
+                const messagesList = Object.values(newErrors);
+                toast.error(
+                    <div className="text-right">
+                        <div className="font-bold mb-1">
+                            يرجى تصحيح الأخطاء التالية:
+                        </div>
+                        <ul className="list-disc list-inside space-y-0.5 text-sm">
+                            {messagesList.map((msg, idx) => (
+                                <li key={idx}>{msg}</li>
+                            ))}
+                        </ul>
+                    </div>
+                );
                 setLoading(false);
                 return;
             }
+
+            // =================================================
+            // SIGNATURES (Base64 PNG from canvas) — with fallback
+            // =================================================
+            const userSignatureData =
+                getSignatureData(userSignatureRef) ||
+                formData.user_signature ||
+                '';
+
+            const managerSignatureData =
+                getSignatureData(managerSignatureRef) ||
+                formData.manager_signature ||
+                '';
+
+            const secondPersonSignatureData =
+                getSignatureData(secondPersonSignatureRef) ||
+                formData.second_person_signature ||
+                '';
 
             // ===== SWAPPED: account_from and account_to =====
             let submitData = {
@@ -437,9 +559,9 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
             }
 
             submitData.notes = formData.notes || '';
-            submitData.user_signature = formData.user_signature || '';
-            submitData.manager_signature = formData.manager_signature || '';
-            submitData.second_person_signature = formData.second_person_signature || '';
+            submitData.user_signature = userSignatureData;
+            submitData.manager_signature = managerSignatureData;
+            submitData.second_person_signature = secondPersonSignatureData;
 
             if (paymentMethod === 'banks') {
                 submitData.bank = parseInt(formData.bank);
@@ -530,9 +652,12 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
                             errorMessages.push(`${key}: ${errorData[key]}`);
                         }
                     });
-                    throw new Error(errorMessages.join('\n') || 'فشل حفظ المعاملة');
+                    throw new Error(
+                        errorMessages.join('\n') ||
+                        'فشل حفظ المعاملة، يرجى المحاولة مرة أخرى'
+                    );
                 }
-                throw new Error('فشل حفظ المعاملة');
+                throw new Error('فشل حفظ المعاملة، يرجى المحاولة مرة أخرى');
             }
 
             const result = await response.json();
@@ -581,12 +706,8 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
             // =================================================
             toast.success('✅ الان يمكنك طباعة اذن الصرف');
 
-            // Get the latest saved transaction
             const updatedTransaction = await fetchTransactionDetails(transactionId);
 
-            // =================================================
-            // PREPARE VOUCHER DATA
-            // =================================================
             const voucherData = {
                 ...(updatedTransaction || {}),
                 ...formData,
@@ -623,34 +744,34 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
 
                 user_signature:
                     updatedTransaction?.user_signature ??
-                    formData.user_signature ??
+                    userSignatureData ??
                     '',
 
                 manager_signature:
                     updatedTransaction?.manager_signature ??
-                    formData.manager_signature ??
+                    managerSignatureData ??
                     '',
 
                 second_person_signature:
                     updatedTransaction?.second_person_signature ??
-                    formData.second_person_signature ??
+                    secondPersonSignatureData ??
                     '',
             };
 
             console.log('Voucher data:', voucherData);
 
-            // =================================================
-            // SHOW VOUCHER
-            // =================================================
             setVoucherInfo(voucherData);
             setShowVoucher(true);
 
-            // Refresh parent
             onSuccess?.();
 
         } catch (error) {
             console.error('Error saving transaction:', error);
-            toast.error('❌ ' + error.message);
+            toast.error(
+                '❌ ' +
+                    (error?.message ||
+                        'حدث خطأ أثناء حفظ المعاملة، يرجى المحاولة مرة أخرى')
+            );
         } finally {
             setLoading(false);
         }
@@ -760,6 +881,57 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
         return account ? account.name : accountId;
     };
 
+    // =========================================================
+    // SIGNATURE CANVAS WRAPPER
+    // =========================================================
+    const SignatureField = ({
+        label,
+        canvasRef,
+        existingData,
+        placeholder
+    }) => (
+        <div className="space-y-1">
+            <div className="flex items-center justify-between">
+                <label className="block text-xs font-medium text-gray-600">
+                    {label}
+                </label>
+                <button
+                    type="button"
+                    onClick={() => clearSignature(canvasRef)}
+                    disabled={loading}
+                    className="cursor-pointer flex items-center gap-1 text-[11px] text-red-500 hover:text-red-500 transition-colors disabled:opacity-50"
+                >
+                    <FaEraser className="text-[10px]" />
+                    مسح
+                </button>
+            </div>
+
+            <div
+                className="relative bg-white rounded-sm border-2 border-dashed overflow-hidden"
+                style={{
+                    borderColor: '#a47d52',
+                    boxShadow: '0 0 0 3px rgba(164, 125, 82, 0.08)'
+                }}
+            >
+                <SignatureCanvas
+                    ref={canvasRef}
+                    penColor="#1e293b"
+                    backgroundColor="rgba(255,255,255,0)"
+                    canvasProps={{
+                        className:
+                            'w-full h-24 sm:h-28 touch-none cursor-crosshair',
+                        style: { touchAction: 'none' }
+                    }}
+                />
+                {!existingData && (
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-300">
+                        {placeholder}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+
     return (
         <>
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/1 backdrop-blur-sm p-4">
@@ -854,7 +1026,7 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
                                             <span className="font-medium text-[#a47d52]">
                                                 {getAmountInWords()}
                                             </span>
-                                            <span className="text-sm text-gray-500">فقظ لاغير</span>
+                                            <span className="text-sm text-gray-500">فقط لا غير</span>
                                         </div>
                                     </div>
                                 )}
@@ -945,80 +1117,26 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        <div className="space-y-1">
-                                            <label className="block text-xs font-medium text-gray-600">
-                                                توقيع المستخدم
-                                            </label>
-                                            <input
-                                                ref={userSignatureRef}
-                                                type="text"
-                                                name="user_signature"
-                                                value={formData.user_signature || ''}
-                                                onChange={handleChange}
-                                                className="w-full px-3 py-2 bg-white rounded-sm shadow-sm focus:outline-none transition-all duration-300 text-right text-sm"
-                                                style={{
-                                                    borderTopColor: 'transparent',
-                                                    borderBottomColor: 'white',
-                                                    borderLeftColor: 'transparent',
-                                                    borderRightColor: formData.user_signature ? '#a47d52' : '#ef4444',
-                                                    borderWidth: '2px',
-                                                    borderStyle: 'solid',
-                                                    boxShadow: formData.user_signature ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : 'none'
-                                                }}
-                                                placeholder="توقيع المستخدم..."
-                                                disabled={loading}
-                                            />
-                                        </div>
+                                        <SignatureField
+                                            label="توقيع المحاسب"
+                                            canvasRef={userSignatureRef}
+                                            existingData={formData.user_signature}
+                                            placeholder="وقّع هنا بالإصبع أو القلم ..."
+                                        />
 
-                                        <div className="space-y-1">
-                                            <label className="block text-xs font-medium text-gray-600">
-                                                توقيع المدير
-                                            </label>
-                                            <input
-                                                ref={managerSignatureRef}
-                                                type="text"
-                                                name="manager_signature"
-                                                value={formData.manager_signature || ''}
-                                                onChange={handleChange}
-                                                className="w-full px-3 py-2 bg-white rounded-sm shadow-sm focus:outline-none transition-all duration-300 text-right text-sm"
-                                                style={{
-                                                    borderTopColor: 'transparent',
-                                                    borderBottomColor: 'white',
-                                                    borderLeftColor: 'transparent',
-                                                    borderRightColor: formData.manager_signature ? '#a47d52' : '#ef4444',
-                                                    borderWidth: '2px',
-                                                    borderStyle: 'solid',
-                                                    boxShadow: formData.manager_signature ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : 'none'
-                                                }}
-                                                placeholder="توقيع المدير..."
-                                                disabled={loading}
-                                            />
-                                        </div>
+                                        <SignatureField
+                                            label="توقيع المدير"
+                                            canvasRef={managerSignatureRef}
+                                            existingData={formData.manager_signature}
+                                            placeholder="وقّع هنا بالإصبع أو القلم ..."
+                                        />
 
-                                        <div className="space-y-1">
-                                            <label className="block text-xs font-medium text-gray-600">
-                                                توقيع الشخص المستلم
-                                            </label>
-                                            <input
-                                                ref={secondPersonSignatureRef}
-                                                type="text"
-                                                name="second_person_signature"
-                                                value={formData.second_person_signature || ''}
-                                                onChange={handleChange}
-                                                className="w-full px-3 py-2 bg-white rounded-sm shadow-sm focus:outline-none transition-all duration-300 text-right text-sm"
-                                                style={{
-                                                    borderTopColor: 'transparent',
-                                                    borderBottomColor: 'white',
-                                                    borderLeftColor: 'transparent',
-                                                    borderRightColor: formData.second_person_signature ? '#a47d52' : '#ef4444',
-                                                    borderWidth: '2px',
-                                                    borderStyle: 'solid',
-                                                    boxShadow: formData.second_person_signature ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : 'none'
-                                                }}
-                                                placeholder="توقيع الشخص المستلم..."
-                                                disabled={loading}
-                                            />
-                                        </div>
+                                        <SignatureField
+                                            label="توقيع الشخص المستلم"
+                                            canvasRef={secondPersonSignatureRef}
+                                            existingData={formData.second_person_signature}
+                                            placeholder="وقّع هنا بالإصبع أو القلم ..."
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -1026,90 +1144,106 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
 
                         {!isEditMode && (
                             <>
-                                {/* ===== Transaction Date — MOVED TO FIRST ===== */}
-                                <div className="space-y-1">
-                                    <label className="block text-sm font-semibold text-gray-700">
-                                        تاريخ المعاملة <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        ref={transactionDateRef}
-                                        type="date"
-                                        name="transaction_date"
-                                        value={formData.transaction_date}
-                                        onChange={handleChange}
-                                        onKeyDown={(e) => handleKeyDown(e, transactionNoRef)}
-                                        className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
-                                        style={{
-                                            borderTopColor: 'transparent',
-                                            borderBottomColor: 'white',
-                                            borderLeftColor: 'transparent',
-                                            borderRightColor: formData.transaction_date ? '#a47d52' : '#ef4444',
-                                            borderWidth: '2px',
-                                            borderStyle: 'solid',
-                                            boxShadow: formData.transaction_date ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
-                                        }}
-                                        required
-                                        disabled={loading}
-                                        autoFocus
-                                    />
-                                </div>
+                                {/* =========================================
+                                    ROW 1: DATE + TRANSACTION NO + CURRENCY
+                                    (mobile: col / md+: row)
+                                ========================================= */}
+                                <div className="flex flex-col md:flex-row md:items-end gap-4">
+                                    {/* Transaction Date */}
+                                    <div className="flex-1 space-y-1">
+                                        <label className="block text-sm font-semibold text-gray-700">
+                                            تاريخ المعاملة <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            ref={transactionDateRef}
+                                            type="date"
+                                            name="transaction_date"
+                                            value={formData.transaction_date}
+                                            onChange={handleChange}
+                                            onKeyDown={(e) => handleKeyDown(e, transactionNoRef)}
+                                            className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
+                                            style={{
+                                                borderTopColor: 'transparent',
+                                                borderBottomColor: 'white',
+                                                borderLeftColor: 'transparent',
+                                                borderRightColor: formData.transaction_date ? '#a47d52' : '#ef4444',
+                                                borderWidth: '2px',
+                                                borderStyle: 'solid',
+                                                boxShadow: formData.transaction_date ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
+                                            }}
+                                            required
+                                            disabled={loading}
+                                            autoFocus
+                                        />
+                                        {errors.transaction_date && (
+                                            <p className="text-red-500 text-sm mt-1">
+                                                {errors.transaction_date}
+                                            </p>
+                                        )}
+                                    </div>
 
-                                {/* Transaction Number (Manual) */}
-                                <div className="space-y-1">
-                                    <label className="block text-sm font-semibold text-gray-700">
-                                        رقم المعاملة
-                                    </label>
-                                    <input
-                                        ref={transactionNoRef}
-                                        type="text"
-                                        name="transaction_no"
-                                        value={formData.transaction_no}
-                                        onChange={handleChange}
-                                        onKeyDown={(e) => handleKeyDown(e, currencyRef)}
-                                        className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
-                                        style={{
-                                            borderTopColor: 'transparent',
-                                            borderBottomColor: 'white',
-                                            borderLeftColor: 'transparent',
-                                            borderRightColor: formData.transaction_no ? '#a47d52' : '#ef4444',
-                                            borderWidth: '2px',
-                                            borderStyle: 'solid',
-                                            boxShadow: formData.transaction_no ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
-                                        }}
-                                        placeholder="أدخل رقم المعاملة..."
-                                        disabled={loading}
-                                    />
-                                </div>
+                                    {/* Transaction Number */}
+                                    <div className="flex-1 space-y-1">
+                                        <label className="block text-sm font-semibold text-gray-700">
+                                            رقم المعاملة
+                                        </label>
+                                        <input
+                                            ref={transactionNoRef}
+                                            type="text"
+                                            name="transaction_no"
+                                            value={formData.transaction_no}
+                                            onChange={handleChange}
+                                            onKeyDown={(e) => handleKeyDown(e, currencyRef)}
+                                            className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
+                                            style={{
+                                                borderTopColor: 'transparent',
+                                                borderBottomColor: 'white',
+                                                borderLeftColor: 'transparent',
+                                                borderRightColor: formData.transaction_no ? '#a47d52' : '#ef4444',
+                                                borderWidth: '2px',
+                                                borderStyle: 'solid',
+                                                boxShadow: formData.transaction_no ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
+                                            }}
+                                            placeholder="أدخل رقم المعاملة..."
+                                            disabled={loading}
+                                        />
+                                    </div>
 
-                                {/* Currency Selection */}
-                                <div>
-                                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                                        العملة <span className="text-red-500">*</span>
-                                    </label>
-                                    <select
-                                        ref={currencyRef}
-                                        name="currency"
-                                        value={formData.currency}
-                                        onChange={handleChange}
-                                        onKeyDown={(e) => handleKeyDown(e, accountFromRef)}
-                                        className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
-                                        style={{
-                                            borderTopColor: 'transparent',
-                                            borderBottomColor: 'white',
-                                            borderLeftColor: 'transparent',
-                                            borderRightColor: formData.currency ? '#a47d52' : '#ef4444',
-                                            borderWidth: '2px',
-                                            borderStyle: 'solid',
-                                            boxShadow: formData.currency ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
-                                        }}
-                                        disabled={loading}
-                                    >
-                                        {currencyOptions.map((option) => (
-                                            <option key={option.value} value={option.value}>
-                                                {option.label} ({option.value})
-                                            </option>
-                                        ))}
-                                    </select>
+                                    {/* Currency Selection */}
+                                    <div className="flex-1 space-y-1">
+                                        <label className="block text-sm font-semibold text-gray-700">
+                                            العملة <span className="text-red-500">*</span>
+                                        </label>
+                                        <select
+                                            ref={currencyRef}
+                                            name="currency"
+                                            value={formData.currency}
+                                            onChange={handleChange}
+                                            onKeyDown={(e) => handleKeyDown(e, accountFromRef)}
+                                            className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
+                                            style={{
+                                                borderTopColor: 'transparent',
+                                                borderBottomColor: 'white',
+                                                borderLeftColor: 'transparent',
+                                                borderRightColor: formData.currency ? '#a47d52' : '#ef4444',
+                                                borderWidth: '2px',
+                                                borderStyle: 'solid',
+                                                boxShadow: formData.currency ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
+                                            }}
+                                            disabled={loading}
+                                        >
+                                            {currencyOptions.map((option) => (
+                                                <option key={option.value} value={option.value}>
+                                                    {option.label} ({option.value})
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {errors.currency && (
+                                            <p className="text-red-500 text-sm mt-1">
+                                                {errors.currency}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Payment Method Selection */}
@@ -1348,44 +1482,40 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
                                             <span className="text-sm font-medium text-gray-700">المبلغ كتابةً: </span>
                                             <span className="text-sm font-bold text-[#a47d52]">{getAmountInWords()}</span>
                                             <span> </span>
-                                            <span>فقظ لاغير</span>
+                                            <span>فقط لا غير</span>
                                         </div>
                                     )}
                                 </div>
 
-                                {/* Date + Statement */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Date input removed — moved to top of ADD-mode fields */}
-
-                                    <div className="space-y-1">
-                                        <label className="block text-sm font-semibold text-gray-700">
-                                            البيان <span className="text-red-500">*</span>
-                                        </label>
-                                        <input
-                                            ref={statementRef}
-                                            type="text"
-                                            name="statement"
-                                            value={formData.statement}
-                                            onChange={handleChange}
-                                            onKeyDown={(e) => handleKeyDown(e, personReceiptRef)}
-                                            className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
-                                            style={{
-                                                borderTopColor: 'transparent',
-                                                borderBottomColor: 'white',
-                                                borderLeftColor: 'transparent',
-                                                borderRightColor: getFieldBorderColor(isStatementFilled, errors.statement),
-                                                borderWidth: '2px',
-                                                borderStyle: 'solid',
-                                                boxShadow: getFieldShadow(isStatementFilled, errors.statement)
-                                            }}
-                                            placeholder="وصف المعاملة..."
-                                            required
-                                            disabled={loading}
-                                        />
-                                        {errors.statement && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.statement}</p>
-                                        )}
-                                    </div>
+                                {/* 👇 STATEMENT — FULL WIDTH */}
+                                <div className="w-full space-y-1">
+                                    <label className="block text-sm font-semibold text-gray-700">
+                                        البيان <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        ref={statementRef}
+                                        type="text"
+                                        name="statement"
+                                        value={formData.statement}
+                                        onChange={handleChange}
+                                        onKeyDown={(e) => handleKeyDown(e, personReceiptRef)}
+                                        className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
+                                        style={{
+                                            borderTopColor: 'transparent',
+                                            borderBottomColor: 'white',
+                                            borderLeftColor: 'transparent',
+                                            borderRightColor: getFieldBorderColor(isStatementFilled, errors.statement),
+                                            borderWidth: '2px',
+                                            borderStyle: 'solid',
+                                            boxShadow: getFieldShadow(isStatementFilled, errors.statement)
+                                        }}
+                                        placeholder="وصف المعاملة..."
+                                        required
+                                        disabled={loading}
+                                    />
+                                    {errors.statement && (
+                                        <p className="text-red-500 text-sm mt-1">{errors.statement}</p>
+                                    )}
                                 </div>
 
                                 {/* Person Receipt */}
@@ -1722,6 +1852,7 @@ const AddWithdraw = ({ onClose, transactionData, onSuccess, initialData, isEditM
 };
 
 export default AddWithdraw;
+
 
 // import React, { useState, useEffect, useRef } from 'react';
 // import { toast } from 'react-toastify';
@@ -2751,34 +2882,7 @@ export default AddWithdraw;
 
 //                         {!isEditMode && (
 //                             <>
-//                                 {/* Transaction Number (Manual) */}
-//                                 <div className="space-y-1">
-//                                     <label className="block text-sm font-semibold text-gray-700">
-//                                         رقم المعاملة
-//                                     </label>
-//                                     <input
-//                                         ref={transactionNoRef}
-//                                         type="text"
-//                                         name="transaction_no"
-//                                         value={formData.transaction_no}
-//                                         onChange={handleChange}
-//                                         onKeyDown={(e) => handleKeyDown(e, transactionDateRef)}
-//                                         className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
-//                                         style={{
-//                                             borderTopColor: 'transparent',
-//                                             borderBottomColor: 'white',
-//                                             borderLeftColor: 'transparent',
-//                                             borderRightColor: formData.transaction_no ? '#a47d52' : '#ef4444',
-//                                             borderWidth: '2px',
-//                                             borderStyle: 'solid',
-//                                             boxShadow: formData.transaction_no ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
-//                                         }}
-//                                         placeholder="أدخل رقم المعاملة..."
-//                                         disabled={loading}
-//                                     />
-//                                 </div>
-
-//                                 {/* ===== Transaction Date (NEW) ===== */}
+//                                 {/* ===== Transaction Date — MOVED TO FIRST ===== */}
 //                                 <div className="space-y-1">
 //                                     <label className="block text-sm font-semibold text-gray-700">
 //                                         تاريخ المعاملة <span className="text-red-500">*</span>
@@ -2789,7 +2893,7 @@ export default AddWithdraw;
 //                                         name="transaction_date"
 //                                         value={formData.transaction_date}
 //                                         onChange={handleChange}
-//                                         onKeyDown={(e) => handleKeyDown(e, currencyRef)}
+//                                         onKeyDown={(e) => handleKeyDown(e, transactionNoRef)}
 //                                         className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
 //                                         style={{
 //                                             borderTopColor: 'transparent',
@@ -2801,6 +2905,34 @@ export default AddWithdraw;
 //                                             boxShadow: formData.transaction_date ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
 //                                         }}
 //                                         required
+//                                         disabled={loading}
+//                                         autoFocus
+//                                     />
+//                                 </div>
+
+//                                 {/* Transaction Number (Manual) */}
+//                                 <div className="space-y-1">
+//                                     <label className="block text-sm font-semibold text-gray-700">
+//                                         رقم المعاملة
+//                                     </label>
+//                                     <input
+//                                         ref={transactionNoRef}
+//                                         type="text"
+//                                         name="transaction_no"
+//                                         value={formData.transaction_no}
+//                                         onChange={handleChange}
+//                                         onKeyDown={(e) => handleKeyDown(e, currencyRef)}
+//                                         className="w-full px-4 py-3 bg-white rounded-sm shadow-lg focus:outline-none transition-all duration-300 text-right"
+//                                         style={{
+//                                             borderTopColor: 'transparent',
+//                                             borderBottomColor: 'white',
+//                                             borderLeftColor: 'transparent',
+//                                             borderRightColor: formData.transaction_no ? '#a47d52' : '#ef4444',
+//                                             borderWidth: '2px',
+//                                             borderStyle: 'solid',
+//                                             boxShadow: formData.transaction_no ? '0 0 0 3px rgba(164, 125, 82, 0.12)' : '0 0 0 3px rgba(239, 68, 68, 0.08)'
+//                                         }}
+//                                         placeholder="أدخل رقم المعاملة..."
 //                                         disabled={loading}
 //                                     />
 //                                 </div>
@@ -3014,7 +3146,6 @@ export default AddWithdraw;
 //                                             }}
 //                                             required
 //                                             disabled={loading}
-//                                             autoFocus
 //                                         >
 //                                             <option value="">اختر الحساب...</option>
 //                                             {accounts.map((account) => (
@@ -3447,4 +3578,5 @@ export default AddWithdraw;
 // };
 
 // export default AddWithdraw;
+
 
