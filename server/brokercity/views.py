@@ -44,15 +44,13 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser  #
 ##############
 # Email
 ##############
-from django.core.mail import send_mail 
-
 from datetime import datetime
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
-
+from django.core.mail import send_mail  
 
 
 from .serializers import (
@@ -85,6 +83,7 @@ from .serializers import (
     WhatsAppMessageSerializer,
     SendWhatsAppSerializer,
 
+
     # Properties Management 
     OwnerSerializer,
     BuildingSerializer,
@@ -93,7 +92,7 @@ from .serializers import (
     SliderSerializer,
     
     # Developer
-    DeveloperSerializer, DeveloperDetailSerializer,
+    DeveloperSerializer, DeveloperDetailSerializer, SendEmailSerializer, 
 
     # OfferSale
     OffersaleSerializer, OffersaleListSerializer, PaymentPlanSerializer,
@@ -2617,6 +2616,112 @@ class DeveloperDetailView(generics.RetrieveUpdateDestroyAPIView):
 # NEW: Send Bulk Email
 # =============================================================
 
+# class SendBulkEmailView(APIView):
+#     """
+#     POST /api/developers/send-email/
+
+#     Body:
+#     {
+#         "subject": "...",
+#         "message": "...",
+#         "recipient_ids": [1, 2, 3]
+#     }
+
+#     The backend:
+#     1. Validates the payload.
+#     2. Loads the selected Developer records.
+#     3. Filters out records without a valid email.
+#     4. Sends one email per recipient (BCC/CC optional).
+#     5. Returns a per-recipient status report.
+#     """
+#     permission_classes = [IsAuthenticated]
+
+#     def post(self, request):
+#         serializer = SendEmailSerializer(data=request.data)
+
+#         if not serializer.is_valid():
+#             return Response(
+#                 serializer.errors,
+#                 status=status.HTTP_400_BAD_REQUEST,
+#             )
+
+#         data = serializer.validated_data
+#         subject = data['subject']
+#         message = data['message']
+#         recipient_ids = data['recipient_ids']
+
+#         # Load only the developers that were selected AND have an email
+#         developers = (
+#             Developer.objects
+#             .filter(id__in=recipient_ids)
+#             .exclude(email__isnull=True)
+#             .exclude(email__exact='')
+#         )
+
+#         if not developers.exists():
+#             return Response(
+#                 {'detail': 'لا يوجد أي مطور محدد لديه بريد إلكتروني صالح'},
+#                 status=status.HTTP_400_BAD_REQUEST,
+#             )
+
+#         from_email = settings.DEFAULT_FROM_EMAIL
+
+#         sent = []
+#         failed = []
+
+#         # Use a single connection for all sends — much faster than
+#         # opening a new SMTP connection per message.
+#         connection = get_connection(fail_silently=False)
+
+#         try:
+#             connection.open()
+
+#             for dev in developers:
+#                 try:
+#                     send_mail(
+#                         subject=subject,
+#                         message=message,
+#                         from_email=from_email,
+#                         recipient_list=[dev.email],
+#                         fail_silently=False,
+#                         connection=connection,
+#                     )
+#                     sent.append({
+#                         'id': dev.id,
+#                         'name': dev.name or '',
+#                         'email': dev.email,
+#                     })
+#                 except Exception as e:
+#                     failed.append({
+#                         'id': dev.id,
+#                         'name': dev.name or '',
+#                         'email': dev.email,
+#                         'error': str(e),
+#                     })
+#         finally:
+#             try:
+#                 connection.close()
+#             except Exception:
+#                 pass
+
+#         response_payload = {
+#             'status': 'success' if sent else 'error',
+#             'sent_count': len(sent),
+#             'failed_count': len(failed),
+#             'sent': sent,
+#             'failed': failed,
+#         }
+
+#         # If nothing sent → 500, if partial → 200 with errors listed
+#         http_status = (
+#             status.HTTP_200_OK
+#             if sent
+#             else status.HTTP_500_INTERNAL_SERVER_ERROR
+#         )
+
+#         return Response(response_payload, status=http_status)
+
+
 class SendBulkEmailView(APIView):
     """
     POST /api/developers/send-email/
@@ -2628,12 +2733,8 @@ class SendBulkEmailView(APIView):
         "recipient_ids": [1, 2, 3]
     }
 
-    The backend:
-    1. Validates the payload.
-    2. Loads the selected Developer records.
-    3. Filters out records without a valid email.
-    4. Sends one email per recipient (BCC/CC optional).
-    5. Returns a per-recipient status report.
+    Uses Anymail (Mailgun) — no persistent SMTP connection needed.
+    Each send_mail() call makes one HTTPS request to the Mailgun API.
     """
     permission_classes = [IsAuthenticated]
 
@@ -2667,43 +2768,43 @@ class SendBulkEmailView(APIView):
 
         from_email = settings.DEFAULT_FROM_EMAIL
 
+        logger.info(
+            f"Bulk email start | from={from_email} | "
+            f"subject={subject!r} | recipients={developers.count()}"
+        )
+
         sent = []
         failed = []
 
-        # Use a single connection for all sends — much faster than
-        # opening a new SMTP connection per message.
-        connection = get_connection(fail_silently=False)
-
-        try:
-            connection.open()
-
-            for dev in developers:
-                try:
-                    send_mail(
-                        subject=subject,
-                        message=message,
-                        from_email=from_email,
-                        recipient_list=[dev.email],
-                        fail_silently=False,
-                        connection=connection,
-                    )
-                    sent.append({
-                        'id': dev.id,
-                        'name': dev.name or '',
-                        'email': dev.email,
-                    })
-                except Exception as e:
-                    failed.append({
-                        'id': dev.id,
-                        'name': dev.name or '',
-                        'email': dev.email,
-                        'error': str(e),
-                    })
-        finally:
+        for dev in developers:
             try:
-                connection.close()
-            except Exception:
-                pass
+                # ✅ Simple send_mail — Anymail handles the transport
+                send_mail(
+                    subject=subject,
+                    message=message,
+                    from_email=from_email,
+                    recipient_list=[dev.email],
+                    fail_silently=False,
+                    # ⚠️ DO NOT pass connection=... with Anymail
+                )
+                sent.append({
+                    'id': dev.id,
+                    'name': dev.name or '',
+                    'email': dev.email,
+                })
+                logger.info(f"✅ Sent to {dev.email}")
+
+            except Exception as e:
+                logger.error(
+                    f"❌ Failed to send to {dev.email}: {e}",
+                    exc_info=True,
+                )
+                failed.append({
+                    'id': dev.id,
+                    'name': dev.name or '',
+                    'email': dev.email,
+                    'error': str(e),
+                })
 
         response_payload = {
             'status': 'success' if sent else 'error',
@@ -2713,7 +2814,6 @@ class SendBulkEmailView(APIView):
             'failed': failed,
         }
 
-        # If nothing sent → 500, if partial → 200 with errors listed
         http_status = (
             status.HTTP_200_OK
             if sent
@@ -2721,7 +2821,6 @@ class SendBulkEmailView(APIView):
         )
 
         return Response(response_payload, status=http_status)
-
 
 # =============================================================
 # OPTIONAL: Test endpoint (keep your existing one)

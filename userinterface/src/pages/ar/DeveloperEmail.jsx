@@ -238,7 +238,7 @@ const DeveloperEmail = () => {
             }
 
             const response = await fetch(
-                `${BASE}/api/developers/send-email/`,
+                `${BASE}/api/send-email/`,
                 {
                     method: 'POST',
                     headers: {
