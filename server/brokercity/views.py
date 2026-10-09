@@ -3066,30 +3066,41 @@ class MonitorPagination(PageNumberPagination):
 
 # ---------- Helpers ----------
 def _parse_date(value, field_name):
-    """Parse a YYYY-MM-DD string to date, raise ValueError on failure."""
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except (ValueError, TypeError):
         raise ValueError(f"Invalid {field_name} format. Use YYYY-MM-DD.")
 
 
+def _clean_payload(data):
+    """
+    Convert empty strings to None for all fields, and drop keys whose
+    value is None for optional fields (so the serializer uses its default).
+    Keeps the request tolerant of partial payloads from the frontend.
+    """
+    if not isinstance(data, dict):
+        return data
+
+    cleaned = {}
+    for k, v in data.items():
+        if isinstance(v, str) and v.strip() == "":
+            cleaned[k] = None
+        else:
+            cleaned[k] = v
+    return cleaned
+
+
 def _apply_monitor_filters(queryset, request):
-    """
-    Apply search + filters to a Monitor queryset.
-    Query params:
-      - search: matches agent / draws_cause / lead_no / agent_lead_no / draws_no
-      - day or date: YYYY-MM-DD -> date == value
-      - month: string -> month == value (case-insensitive)
-      - from_date / to_date: YYYY-MM-DD -> date BETWEEN
-    """
     search = request.query_params.get('search')
     if search:
         q = Q(agent__icontains=search) | Q(draws_cause__icontains=search)
         if search.isdigit():
+            num = int(search)
             q |= (
-                Q(lead_no=int(search))
-                | Q(agent_lead_no=int(search))
-                | Q(draws_no=int(search))
+                Q(lead_no=num)
+                | Q(lead_reassigned_no=num)
+                | Q(agent_lead_no=num)
+                | Q(draws_no=num)
             )
         queryset = queryset.filter(q)
 
@@ -3110,9 +3121,13 @@ def _apply_monitor_filters(queryset, request):
             raise ValueError("from_date cannot be after to_date.")
         queryset = queryset.filter(date__range=(start, end))
     elif from_date:
-        queryset = queryset.filter(date__gte=_parse_date(from_date, "from_date"))
+        queryset = queryset.filter(
+            date__gte=_parse_date(from_date, "from_date")
+        )
     elif to_date:
-        queryset = queryset.filter(date__lte=_parse_date(to_date, "to_date"))
+        queryset = queryset.filter(
+            date__lte=_parse_date(to_date, "to_date")
+        )
 
     return queryset
 
@@ -3120,13 +3135,23 @@ def _apply_monitor_filters(queryset, request):
 # ---------- CREATE ----------
 @api_view(['POST'])
 def monitor_create(request):
-    serializer = MonitorCreateSerializer(data=request.data)
+    # Normalize empty strings to None first
+    payload = _clean_payload(request.data)
+
+    serializer = MonitorCreateSerializer(data=payload)
     if serializer.is_valid():
         serializer.save()
         return Response(
-            {"message": "Monitor created successfully.", "data": serializer.data},
+            {
+                "message": "Monitor created successfully.",
+                "data": serializer.data,
+            },
             status=status.HTTP_201_CREATED,
         )
+
+    # Print the exact errors to your server console for debugging
+    print("Monitor create validation errors:", serializer.errors)
+
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -3136,19 +3161,28 @@ def monitor_delete(request, pk):
     try:
         obj = Monitor.objects.get(pk=pk)
     except Monitor.DoesNotExist:
-        return Response({"error": "Monitor not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Monitor not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
     obj.delete()
-    return Response({"message": "Monitor deleted successfully."}, status=status.HTTP_200_OK)
+    return Response(
+        {"message": "Monitor deleted successfully."},
+        status=status.HTTP_200_OK,
+    )
 
 
-# ---------- LIST (search + filters + pagination) ----------
+# ---------- LIST ----------
 @api_view(['GET'])
 def monitor_list(request):
-    queryset = Monitor.objects.all()
+    queryset = Monitor.objects.all().order_by('-created_at')
     try:
         queryset = _apply_monitor_filters(queryset, request)
     except ValueError as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     paginator = MonitorPagination()
     page = paginator.paginate_queryset(queryset, request)
@@ -3162,6 +3196,9 @@ def monitor_detail(request, pk):
     try:
         obj = Monitor.objects.get(pk=pk)
     except Monitor.DoesNotExist:
-        return Response({"error": "Monitor not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(
+            {"error": "Monitor not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
     serializer = MonitorSerializer(obj)
     return Response(serializer.data, status=status.HTTP_200_OK)

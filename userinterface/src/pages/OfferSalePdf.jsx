@@ -1,18 +1,182 @@
-// OfferSalesPDF.jsx
+// LeadsStagesGuide.jsx
 // npm install jspdf jspdf-autotable
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import logo from '../assets/images/logogo-removebg-old.png';
+import { FaFilePdf, FaSpinner, FaPrint } from 'react-icons/fa';
+
+// ⬇️ Adjust this path to wherever your logo lives
+import brokerCityLogo from '../assets/images/logogo-removebg_old.png';
+
+// =============================================================
+// STAGE DATA — Full list with Arabic explanations
+// =============================================================
+const STAGES = [
+    {
+        num: 1,
+        en: 'Fresh Lead',
+        ar: 'عميل جديد',
+        color: [217, 242, 245],
+        textColor: [15, 61, 62],
+        explain:
+            'عبارة عن عميل جديد لم يسبق التواصل معه، تم إدخاله إلى النظام للتو. لا توجد أي محاولة تواصل سابقة معه.',
+    },
+    {
+        num: 2,
+        en: 'Reassign Lead',
+        ar: 'عميل تم إعادة توزيعه',
+        color: [63, 198, 240],
+        textColor: [255, 255, 255],
+        explain:
+            'تم إعادة توزيع العميل على موظف مبيعات آخر، إما بسبب عدم التمكن من متابعته أو لتغيير مسؤول المتابعة.',
+    },
+    {
+        num: 3,
+        en: 'Lead Accepted',
+        ar: 'تم قبول الطلب',
+        color: [13, 63, 143],
+        textColor: [255, 255, 255],
+        explain:
+            'تم قبول العميل من قِبَل موظف المبيعات المسؤول، وأصبح مسؤولاً عن متابعته من هذه المرحلة.',
+    },
+    {
+        num: 4,
+        en: 'Contact Attempt',
+        ar: 'محاولة التواصل',
+        color: [143, 209, 176],
+        textColor: [15, 61, 62],
+        explain:
+            'تمت محاولة التواصل مع العميل (اتصال أو رسالة) لكن لم يتم الرد أو لم تكتمل المحادثة بعد.',
+    },
+    {
+        num: 5,
+        en: 'Lead Contacted',
+        ar: 'تم التواصل',
+        color: [255, 230, 0],
+        textColor: [61, 47, 0],
+        explain:
+            'تم التواصل الفعلي مع العميل وتم الرد عليه، وتم التأكد من اهتمامه المبدئي بالعقار.',
+    },
+    {
+        num: 6,
+        en: 'Hold Lead',
+        ar: 'عميل مستقبلي',
+        color: [156, 156, 156],
+        textColor: [255, 255, 255],
+        explain:
+            'العميل مهتم ولكن ليس في الوقت الحالي، تم تأجيل المتابعة معه إلى وقت لاحق.',
+    },
+    {
+        num: 7,
+        en: 'Requirements Ident.',
+        ar: 'تحديد المتطلبات',
+        color: [244, 162, 107],
+        textColor: [61, 31, 0],
+        explain:
+            'تم تحديد متطلبات العميل بدقة (النوع، المساحة، الموقع، الميزانية، طريقة الدفع).',
+    },
+    {
+        num: 8,
+        en: 'Property Matching',
+        ar: 'مطابقة العقار',
+        color: [240, 139, 28],
+        textColor: [255, 255, 255],
+        explain:
+            'تم البحث عن العقارات المتوافقة مع متطلبات العميل وترشيحها له.',
+    },
+    {
+        num: 9,
+        en: 'Client Interested',
+        ar: 'العميل مهتم',
+        color: [122, 201, 67],
+        textColor: [27, 61, 0],
+        explain:
+            'أبدى العميل اهتماماً حقيقياً بعقار أو أكثر من العقارات المُرشحة له.',
+    },
+    {
+        num: 10,
+        en: 'Viewing Scheduled',
+        ar: 'تحديد موعد المعاينة',
+        color: [0, 183, 165],
+        textColor: [255, 255, 255],
+        explain:
+            'تم الاتفاق مع العميل على موعد محدد لمعاينة العقار.',
+    },
+    {
+        num: 11,
+        en: 'Viewing Completed',
+        ar: 'تمت المعاينة',
+        color: [26, 164, 106],
+        textColor: [255, 255, 255],
+        explain:
+            'تمت معاينة العقار فعلياً من قِبَل العميل، ونُقلت ملاحظاته وانطباعه.',
+    },
+    {
+        num: 12,
+        en: 'Offer & Negotiation',
+        ar: 'العرض والتفاوض',
+        color: [141, 106, 214],
+        textColor: [255, 255, 255],
+        explain:
+            'تم تقديم عرض السعر للعميل وبدأت مرحلة التفاوض على الشروط والأسعار.',
+    },
+    {
+        num: 13,
+        en: 'Collecting Documents',
+        ar: 'جمع المستندات',
+        color: [141, 59, 168],
+        textColor: [255, 255, 255],
+        explain:
+            'تم البدء في جمع المستندات المطلوبة من العميل (الهوية، البيانات المالية، وغيرها).',
+    },
+    {
+        num: 14,
+        en: 'Reservation Agreement (MOU / Quotation)',
+        ar: 'اتفاقية الحجز (MOU / Quotation)',
+        color: [47, 191, 160],
+        textColor: [255, 255, 255],
+        explain:
+            'تم توقيع اتفاقية الحجز أو إصدار عرض السعر الرسمي بين الطرفين.',
+    },
+    {
+        num: 15,
+        en: 'Continue Sale / Leasing Process',
+        ar: 'استمرار البيع',
+        color: [31, 107, 58],
+        textColor: [255, 255, 255],
+        explain:
+            'تم الانتقال إلى إجراءات البيع أو الإيجار الرسمية حتى الإتمام النهائي.',
+    },
+    {
+        num: 16,
+        en: 'Closed (Won)',
+        ar: 'مغلق (ناجح)',
+        color: [193, 224, 74],
+        textColor: [45, 61, 0],
+        explain:
+            'تمت العملية بنجاح وإغلاق الملف لصالح الشركة. العميل أصبح عميلاً فعلياً.',
+    },
+    {
+        num: 17,
+        en: 'Closed (Lost)',
+        ar: 'مغلق (غير ناجح)',
+        color: [255, 77, 77],
+        textColor: [255, 255, 255],
+        explain:
+            'تم إغلاق الملف دون إتمام الصفقة، إما لعدم رغبة العميل أو لظروف أخرى.',
+    },
+];
 
 // =============================================================
 // COMPONENT
 // =============================================================
-
-const OfferSalesPDF = ({ offerData, onGenerated }) => {
+const LeadsStagesGuide = () => {
     const isGenerating = useRef(false);
+    const [generating, setGenerating] = useState(false);
     const [logoBase64, setLogoBase64] = useState(null);
+    const [fontBase64, setFontBase64] = useState(null);
+    const [fontLoaded, setFontLoaded] = useState(false);
 
     // ---- Load logo as base64 on mount ----
     useEffect(() => {
@@ -20,7 +184,7 @@ const OfferSalesPDF = ({ offerData, onGenerated }) => {
 
         const loadLogo = async () => {
             try {
-                const res = await fetch(logo);
+                const res = await fetch(brokerCityLogo);
                 const blob = await res.blob();
                 const reader = new FileReader();
 
@@ -43,120 +207,55 @@ const OfferSalesPDF = ({ offerData, onGenerated }) => {
         };
     }, []);
 
-    // =========================================================
-    // DEFAULT DATA
-    // =========================================================
-    const defaultData = {
-        referenceNo: 'Villa Bawaba Elsharg / REF-PENDING',
-        date: new Date().toLocaleDateString('en-GB'),
-        recipientName: 'Abdulaziz Eidha Salmeen Hassan Aljaberi',
-        developerName: 'Broker City Properties',
-        projectName: 'Villa Bawaba Elsharg',
+    // ---- Load Arabic font as base64 (optional but recommended) ----
+    // Place an Arabic TTF at: src/assets/fonts/Cairo-Regular.ttf
+    // If the file is missing, we simply skip — the PDF will still
+    // generate but Arabic glyphs may not render.
+    useEffect(() => {
+        let cancelled = false;
 
-        unitNumber: '',
-        unitType: 'Townhouse',
-        unitModel: '3 Bedrooms',
-        estimatedCompletion: '1/1/2027',
+        const loadFont = async () => {
+            try {
+                const fontUrl = new URL(
+                    '../../assets/fonts/Cairo-Regular.ttf',
+                    import.meta.url
+                ).href;
 
-        basePrice: 2550000,
-        downPaymentPercent: 20,
-        handoverPercent: 80,
+                const res = await fetch(fontUrl);
+                if (!res.ok) throw new Error('Font not found');
 
-        municipalityFeePercent: 2,
-        officeFeePercent: 2,
-        vatPercent: 5,
-        nocFee: 5000,
+                const blob = await res.blob();
+                const reader = new FileReader();
 
-        currency: 'AED',
-    };
+                reader.onloadend = () => {
+                    if (!cancelled) {
+                        setFontBase64(reader.result);
+                    }
+                };
 
-    const raw = { ...defaultData, ...(offerData || {}) };
-
-    // =========================================================
-    // CALCULATED AMOUNTS (unchanged)
-    // =========================================================
-    const calc = (() => {
-        const base = Number(raw.basePrice || 0);
-
-        const downPaymentAmount =
-            (base * Number(raw.downPaymentPercent || 0)) / 100;
-        const handoverAmount =
-            (base * Number(raw.handoverPercent || 0)) / 100;
-
-        const municipalityFee =
-            (base * Number(raw.municipalityFeePercent || 0)) / 100;
-        const officeFee =
-            (base * Number(raw.officeFeePercent || 0)) / 100;
-
-        // VAT from Office Fee
-        const vat = (officeFee * Number(raw.vatPercent || 0)) / 100;
-
-        const noc = Number(raw.nocFee || 0);
-
-        const grandTotal =
-            base + municipalityFee + officeFee + vat + noc;
-
-        return {
-            base,
-            downPaymentAmount,
-            handoverAmount,
-            municipalityFee,
-            officeFee,
-            vat,
-            noc,
-            grandTotal,
+                reader.readAsDataURL(blob);
+            } catch (err) {
+                console.warn(
+                    'Arabic font not loaded — Arabic text may not render in PDF:',
+                    err
+                );
+            }
         };
-    })();
+
+        loadFont();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     // =========================================================
-    // HELPERS
-    // =========================================================
-    const formatAED = (n) =>
-        Number(n || 0).toLocaleString('en-US', {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-        });
-
-    const formatPercent = (n) => {
-        const num = Number(n || 0);
-        return Number.isInteger(num) ? String(num) : num.toFixed(1);
-    };
-
-    // =========================================================
-    // COLORS — ALL SHADES OF GRAY
-    // =========================================================
-    const COLORS = {
-        // ---- Page header ----
-        headerBg: [255, 255, 255],
-        headerText: [26, 47, 60],
-
-        // ---- Table headers — light gray ----
-        tableHeaderBg: [235, 235, 235],    // light gray
-        tableHeaderText: [60, 60, 60],     // dark gray text
-
-        // ---- Row accents (all gray) ----
-        alternateRow: [248, 248, 248],     // subtle gray
-        totalRowBg: [225, 225, 225],       // medium gray highlight for "Total"
-
-        // ---- GRAND TOTAL row ----
-        grandTotalBg: [110, 110, 110],     // darker gray
-        grandTotalText: [255, 255, 255],   // white text
-
-        // ---- Header underline under logo (gray) ----
-        headerLineColor: [120, 120, 120],
-
-        // ---- Misc ----
-        accentDark: [26, 47, 60],
-        darkGray: [80, 80, 80],
-        white: [255, 255, 255],
-    };
-
-    // =========================================================
-    // GENERATE PDF
+    // GENERATE PDF — using jsPDF + jspdf-autotable
     // =========================================================
     const generatePDF = () => {
         if (isGenerating.current) return;
         isGenerating.current = true;
+        setGenerating(true);
 
         try {
             const doc = new jsPDF({
@@ -165,973 +264,393 @@ const OfferSalesPDF = ({ offerData, onGenerated }) => {
                 format: 'a4',
             });
 
-            const pageW = doc.internal.pageSize.getWidth();
-            const pageH = doc.internal.pageSize.getHeight();
+            const pageW = doc.internal.pageSize.getWidth(); // 210
+            const pageH = doc.internal.pageSize.getHeight(); // 297
             const margin = 15;
 
             // =====================================================
-            // 1) PAGE HEADER — logo at LEFT, underline under logo only
+            // Register Arabic font (if available)
             // =====================================================
-const headerHeight = 26;                       // unchanged
-
-doc.setFillColor(...COLORS.headerBg);
-doc.rect(0, 0, pageW, headerHeight, 'F');
-
-// ---- Logo at LEFT (pinned near top, not vertically centered) ----
-const logoW = 65;
-const logoH = 58;
-const logoX = 5;
-const logoY = -12;                             // unchanged
-
-if (logoBase64) {
-    try {
-        doc.addImage(
-            logoBase64,
-            'PNG',
-            logoX,
-            logoY,
-            logoW,
-            logoH,
-            undefined,
-            'FAST'
-        );
-    } catch (err) {
-        console.error('Logo render error:', err);
-    }
-}
-
-// ---- Underline: fixed Y just above the header bottom, same width as logo ----
-const lineY = headerHeight - 1;                // ← fixed at 25mm, inside the header
-doc.setDrawColor(...COLORS.headerLineColor);
-doc.setLineWidth(0.6);
-doc.line(logoX, lineY, logoX + logoW, lineY);
+            let arabicFontName = 'helvetica';
+            if (fontBase64) {
+                try {
+                    doc.addFileToVFS('Cairo-Regular.ttf', fontBase64);
+                    doc.addFont(
+                        'Cairo-Regular.ttf',
+                        'Cairo',
+                        'normal'
+                    );
+                    doc.addFont(
+                        'Cairo-Regular.ttf',
+                        'Cairo',
+                        'bold'
+                    );
+                    arabicFontName = 'Cairo';
+                } catch (err) {
+                    console.error('Font registration error:', err);
+                }
+            }
 
             // =====================================================
-            // 2) TITLE
+            // 1) HEADER — flex-col: logo, Arabic line 1, Arabic line 2
             // =====================================================
-            let cursorY = headerHeight + 14;
+            const headerHeight = 48;
 
-            doc.setTextColor(...COLORS.accentDark);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(20);
-            doc.text('Offer Sales', margin, cursorY);
+            // White background
+            doc.setFillColor(255, 255, 255);
+            doc.rect(0, 0, pageW, headerHeight, 'F');
 
-            cursorY += 8;
+            // Logo — centered horizontally, pinned near top
+            if (logoBase64) {
+                try {
+                    const logoW = 40;
+                    const logoH = 34;
+                    const logoX = (pageW - logoW) / 2;
+                    const logoY = 4;
 
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...COLORS.darkGray);
+                    doc.addImage(
+                        logoBase64,
+                        'PNG',
+                        logoX,
+                        logoY,
+                        logoW,
+                        logoH,
+                        undefined,
+                        'FAST'
+                    );
+                } catch (err) {
+                    console.error('Logo render error:', err);
+                }
+            }
 
-            doc.text(`Reference No: ${raw.referenceNo}`, margin, cursorY);
-            doc.text(`Date: ${raw.date}`, pageW - margin, cursorY, {
-                align: 'right',
+            // Arabic line 1 — قسم المتابعة والجودة
+            doc.setFont(arabicFontName, 'bold');
+            doc.setFontSize(16);
+            doc.setTextColor(164, 125, 82); // #a47d52
+            doc.text('قسم المتابعة والجودة', pageW / 2, 44, {
+                align: 'center',
             });
 
-            // =====================================================
-            // 3) GREETING
-            // =====================================================
-            cursorY += 12;
-
-            doc.setFont('helvetica', 'bold');
+            // Arabic line 2 — إرشادات تحويل حالات التواصل مع العملاء
+            doc.setFont(arabicFontName, 'normal');
             doc.setFontSize(12);
-            doc.setTextColor(...COLORS.accentDark);
+            doc.setTextColor(40, 40, 40);
             doc.text(
-                `Dear ${raw.recipientName || '________'},`,
-                margin,
-                cursorY
-            );
-
-            cursorY += 8;
-
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(10);
-            doc.setTextColor(...COLORS.darkGray);
-            doc.text(
-                `Thanks for your interest in ${raw.developerName}.`,
-                margin,
-                cursorY
-            );
-
-            cursorY += 6;
-            doc.text(
-                `As discussed, please find below detailed offer for project: ${raw.projectName}.`,
-                margin,
-                cursorY
-            );
-
-            // =====================================================
-            // 4) PROJECT INFO TABLE
-            // =====================================================
-            cursorY += 10;
-
-            autoTable(doc, {
-                startY: cursorY,
-                margin: { left: margin, right: margin },
-                head: [[
-                    'Project',
-                    'Unit Type',
-                    'Unit Model',
-                    'Handover Date',
-                    'Base Price (AED)',
-                ]],
-                body: [[
-                    raw.projectName,
-                    raw.unitType,
-                    raw.unitModel,
-                    raw.estimatedCompletion,
-                    formatAED(calc.base),
-                ]],
-                theme: 'grid',
-                headStyles: {
-                    fillColor: COLORS.tableHeaderBg,
-                    textColor: COLORS.tableHeaderText,
-                    fontSize: 9,
-                    fontStyle: 'bold',
-                    halign: 'center',
-                },
-                bodyStyles: {
-                    fontSize: 9,
-                    halign: 'center',
-                    textColor: COLORS.darkGray,
-                },
-                alternateRowStyles: {
-                    fillColor: COLORS.alternateRow,
-                },
-            });
-
-            cursorY = doc.lastAutoTable.finalY + 8;
-
-            // =====================================================
-            // 5) PAYMENT SCHEDULE
-            // =====================================================
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(11);
-            doc.setTextColor(...COLORS.accentDark);
-            doc.text('Schedule of Installment Payments', margin, cursorY);
-
-            cursorY += 4;
-
-            autoTable(doc, {
-                startY: cursorY,
-                margin: { left: margin, right: margin },
-                head: [[
-                    'Inst.',
-                    'Milestone',
-                    'Percentage',
-                    'Amount (AED)',
-                ]],
-                body: [
-                    [
-                        '1',
-                        'Down Payment',
-                        `${formatPercent(raw.downPaymentPercent)}%`,
-                        formatAED(calc.downPaymentAmount),
-                    ],
-                    [
-                        '2',
-                        'Handover',
-                        `${formatPercent(raw.handoverPercent)}%`,
-                        formatAED(calc.handoverAmount),
-                    ],
-                    [
-                        '',
-                        'Total',
-                        '100%',
-                        formatAED(calc.base),
-                    ],
-                ],
-                theme: 'grid',
-                headStyles: {
-                    fillColor: COLORS.tableHeaderBg,
-                    textColor: COLORS.tableHeaderText,
-                    fontSize: 9,
-                    fontStyle: 'bold',
-                    halign: 'center',
-                },
-                bodyStyles: {
-                    fontSize: 9,
-                    halign: 'center',
-                    textColor: COLORS.darkGray,
-                },
-                columnStyles: {
-                    0: { cellWidth: 15, halign: 'center' },
-                    1: { cellWidth: 80, halign: 'left' },
-                    2: { cellWidth: 30, halign: 'center' },
-                    3: { cellWidth: 55, halign: 'right' },
-                },
-                alternateRowStyles: {
-                    fillColor: COLORS.alternateRow,
-                },
-                // "Total" row → medium gray highlight
-                didParseCell: (hook) => {
-                    if (
-                        hook.section === 'body' &&
-                        hook.row.index === 2
-                    ) {
-                        hook.cell.styles.fontStyle = 'bold';
-                        hook.cell.styles.fillColor = COLORS.totalRowBg;
-                    }
-                },
-            });
-
-            cursorY = doc.lastAutoTable.finalY + 8;
-
-            // =====================================================
-            // 6) ADDITIONAL FEES
-            // =====================================================
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(11);
-            doc.setTextColor(...COLORS.accentDark);
-            doc.text('Additional Fees', margin, cursorY);
-
-            cursorY += 4;
-
-            autoTable(doc, {
-                startY: cursorY,
-                margin: { left: margin, right: margin },
-                head: [[
-                    'Fee',
-                    'Percentage',
-                    'Amount (AED)',
-                ]],
-                body: [
-                    [
-                        'Municipality Fee',
-                        `${formatPercent(raw.municipalityFeePercent)}%`,
-                        formatAED(calc.municipalityFee),
-                    ],
-                    [
-                        'Office Fee',
-                        `${formatPercent(raw.officeFeePercent)}%`,
-                        formatAED(calc.officeFee),
-                    ],
-                    [
-                        `VAT / Tax (${formatPercent(raw.vatPercent)}%)`,
-                        `${formatPercent(raw.vatPercent)}%`,
-                        formatAED(calc.vat),
-                    ],
-                    [
-                        'NOC',
-                        'Fixed',
-                        formatAED(calc.noc),
-                    ],
-                ],
-                theme: 'grid',
-                headStyles: {
-                    fillColor: COLORS.tableHeaderBg,
-                    textColor: COLORS.tableHeaderText,
-                    fontSize: 9,
-                    fontStyle: 'bold',
-                    halign: 'center',
-                },
-                bodyStyles: {
-                    fontSize: 9,
-                    halign: 'center',
-                    textColor: COLORS.darkGray,
-                },
-                columnStyles: {
-                    0: { cellWidth: 90, halign: 'left' },
-                    1: { cellWidth: 35, halign: 'center' },
-                    2: { cellWidth: 55, halign: 'right' },
-                },
-                alternateRowStyles: {
-                    fillColor: COLORS.alternateRow,
-                },
-            });
-
-            cursorY = doc.lastAutoTable.finalY + 8;
-
-            // =====================================================
-            // 7) GRAND TOTAL SUMMARY
-            // =====================================================
-            autoTable(doc, {
-                startY: cursorY,
-                margin: { left: margin, right: margin },
-                head: [[
-                    'Description',
-                    'Amount (AED)',
-                ]],
-                body: [
-                    ['Base Price', formatAED(calc.base)],
-                    [
-                        `Municipality Fee (${formatPercent(raw.municipalityFeePercent)}%)`,
-                        formatAED(calc.municipalityFee),
-                    ],
-                    [
-                        `Office Fee (${formatPercent(raw.officeFeePercent)}%)`,
-                        formatAED(calc.officeFee),
-                    ],
-                    [
-                        `VAT (${formatPercent(raw.vatPercent)}%)`,
-                        formatAED(calc.vat),
-                    ],
-                    ['NOC', formatAED(calc.noc)],
-                    ['GRAND TOTAL', formatAED(calc.grandTotal)],
-                ],
-                theme: 'grid',
-                headStyles: {
-                    fillColor: COLORS.tableHeaderBg,
-                    textColor: COLORS.tableHeaderText,
-                    fontSize: 10,
-                    fontStyle: 'bold',
-                    halign: 'center',
-                },
-                bodyStyles: {
-                    fontSize: 10,
-                    textColor: COLORS.darkGray,
-                },
-                columnStyles: {
-                    0: { cellWidth: 120, halign: 'left' },
-                    1: { cellWidth: 60, halign: 'right' },
-                },
-                // GRAND TOTAL row → darker gray
-                didParseCell: (hook) => {
-                    if (
-                        hook.section === 'body' &&
-                        hook.row.index === 5
-                    ) {
-                        hook.cell.styles.fontStyle = 'bold';
-                        hook.cell.styles.fontSize = 12;
-                        hook.cell.styles.fillColor = COLORS.grandTotalBg;
-                        hook.cell.styles.textColor = COLORS.grandTotalText;
-                    }
-                },
-            });
-
-            // =====================================================
-            // 8) FOOTER — HIDDEN (uncomment to re-enable)
-            // =====================================================
-            /*
-            const footerHeight = 16;
-            const footerY = pageH - footerHeight;
-
-            doc.setFillColor(60, 60, 60);
-            doc.rect(0, footerY, pageW, footerHeight, 'F');
-
-            doc.setTextColor(255, 255, 255);
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
-            doc.text(
-                'P.O.BOX : 7833 Abu Dhabi - U.A.E   |   +971 50 2000 195   |   ☎ +971 2 6666 101',
-                margin,
-                footerY + 6,
-                { align: 'left' }
-            );
-
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(9.5);
-            doc.text(
-                'BROKER CITY PROPERTIES',
+                'إرشادات تحويل حالات التواصل مع العملاء',
                 pageW / 2,
-                footerY + 12,
+                50,
                 { align: 'center' }
             );
-            */
+
+            // Gold separator line under the header
+            doc.setDrawColor(164, 125, 82);
+            doc.setLineWidth(0.8);
+            doc.line(margin, 54, pageW - margin, 54);
 
             // =====================================================
-            // 9) SAVE
+            // 2) STAGES — each stage is a small 2-row block
             // =====================================================
-            const fileName = `Offer-Sales-${raw.projectName.replace(/\s+/g, '-')}-${raw.date.replace(/\//g, '-')}.pdf`;
+            let cursorY = 60;
+
+            const stageNumberW = 12; // circle width
+            const headerRowH = 8;    // colored bar height
+            const bodyRowH = 12;     // explanation height (grows)
+            const gapBetweenStages = 3;
+
+            STAGES.forEach((stage) => {
+                // Calculate explanation height based on text length
+                doc.setFont(arabicFontName, 'normal');
+                doc.setFontSize(10);
+
+                const maxTextW = pageW - margin * 2 - 4;
+                const lines = doc.splitTextToSize(
+                    stage.explain,
+                    maxTextW
+                );
+                const lineHeight = 4.8;
+                const explainH = Math.max(
+                    bodyRowH,
+                    lines.length * lineHeight + 4
+                );
+
+                const blockH = headerRowH + explainH;
+
+                // ---- Page break check ----
+                if (cursorY + blockH + gapBetweenStages > pageH - 20) {
+                    doc.addPage();
+                    cursorY = 20;
+                }
+
+                // =================================================
+                // Header colored bar
+                // =================================================
+                doc.setFillColor(...stage.color);
+                doc.rect(
+                    margin,
+                    cursorY,
+                    pageW - margin * 2,
+                    headerRowH,
+                    'F'
+                );
+
+                // Number circle
+                doc.setFillColor(255, 255, 255);
+                doc.circle(
+                    pageW - margin - 6,
+                    cursorY + headerRowH / 2,
+                    3,
+                    'F'
+                );
+                doc.setFont(arabicFontName, 'bold');
+                doc.setFontSize(9);
+                doc.setTextColor(...stage.textColor);
+                doc.text(
+                    String(stage.num),
+                    pageW - margin - 6,
+                    cursorY + headerRowH / 2 + 0.9,
+                    { align: 'center' }
+                );
+
+                // English + Arabic title inside the bar
+                doc.setFontSize(10);
+                doc.setFont(arabicFontName, 'bold');
+                doc.setTextColor(...stage.textColor);
+                doc.text(
+                    `${stage.en}  -  ${stage.ar}`,
+                    pageW - margin - 12,
+                    cursorY + headerRowH / 2 + 1.2,
+                    { align: 'right' }
+                );
+
+                cursorY += headerRowH;
+
+                // =================================================
+                // Explanation block (white bg, thin border)
+                // =================================================
+                doc.setDrawColor(230, 230, 230);
+                doc.setLineWidth(0.15);
+                doc.rect(
+                    margin,
+                    cursorY,
+                    pageW - margin * 2,
+                    explainH,
+                    'S'
+                );
+
+                doc.setFont(arabicFontName, 'normal');
+                doc.setFontSize(10);
+                doc.setTextColor(60, 60, 60);
+                doc.text(lines, pageW - margin - 3, cursorY + 5, {
+                    align: 'right',
+                    lineHeightFactor: 1.5,
+                });
+
+                cursorY += explainH + gapBetweenStages;
+            });
+
+            // =====================================================
+            // 3) FOOTER on every page
+            // =====================================================
+            const totalPages = doc.internal.getNumberOfPages();
+
+            for (let p = 1; p <= totalPages; p++) {
+                doc.setPage(p);
+
+                const footerY = pageH - 12;
+
+                // Thin gray line
+                doc.setDrawColor(220, 220, 220);
+                doc.setLineWidth(0.3);
+                doc.line(margin, footerY - 2, pageW - margin, footerY - 2);
+
+                // Company name — gold, centered
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(8.5);
+                doc.setTextColor(164, 125, 82);
+                doc.text(
+                    'BROKER CITY PROPERTIES - L.L.C - S.P.C',
+                    pageW / 2,
+                    footerY + 2,
+                    { align: 'center' }
+                );
+
+                // Address / phones — dark gray, centered
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(7.5);
+                doc.setTextColor(120, 120, 120);
+                doc.text(
+                    'P.O.BOX : 7833 Abu Dhabi - U.A.E   |   +971 50 2000 195   |   ☎ +971 2 6666 101',
+                    pageW / 2,
+                    footerY + 6,
+                    { align: 'center' }
+                );
+
+                // Page number — right
+                doc.setFontSize(7.5);
+                doc.setTextColor(160, 160, 160);
+                doc.text(
+                    `Page ${p} / ${totalPages}`,
+                    pageW - margin,
+                    footerY + 6,
+                    { align: 'right' }
+                );
+            }
+
+            // =====================================================
+            // 4) SAVE
+            // =====================================================
+            const fileName = 'دليل_مراحل_العملاء_BrokerCity.pdf';
             doc.save(fileName);
 
-            if (onGenerated) onGenerated(fileName);
+            setFontLoaded(true);
         } catch (err) {
             console.error('PDF generation error:', err);
-            alert('An error occurred while generating the PDF.');
+            alert('حدث خطأ أثناء إنشاء ملف PDF.');
         } finally {
             isGenerating.current = false;
+            setGenerating(false);
         }
     };
 
-    // =========================================================
-    // UI
-    // =========================================================
+    const handlePrint = () => {
+        window.print();
+    };
+
     return (
-        <button
-            type="button"
-            onClick={generatePDF}
-            className="cursor-pointer bg-[#007a84] hover:bg-[#00646c] text-white px-6 py-3 rounded-lg font-extrabold shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.02] active:scale-95"
-        >
-            تحميل عرض الأسعار (PDF)
-        </button>
+        <div className="min-h-screen bg-slate-100 py-6 px-3 sm:px-6 lg:px-8" dir="rtl">
+            {/* ---------- Toolbar ---------- */}
+            <div className="max-w-[210mm] mx-auto mb-4 flex flex-wrap items-center justify-center gap-3 no-print">
+                <button
+                    onClick={generatePDF}
+                    disabled={generating}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#a47d52] text-white font-extrabold shadow-md hover:bg-[#8a6a44] active:scale-95 transition disabled:opacity-60"
+                >
+                    {generating ? (
+                        <>
+                            <FaSpinner className="animate-spin" />
+                            جاري إنشاء PDF...
+                        </>
+                    ) : (
+                        <>
+                            <FaFilePdf />
+                            تحميل PDF
+                        </>
+                    )}
+                </button>
+
+                <button
+                    onClick={handlePrint}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-[#a47d52] border-2 border-[#a47d52]/40 font-extrabold shadow-sm hover:bg-[#a47d52]/10 active:scale-95 transition"
+                >
+                    <FaPrint />
+                    طباعة
+                </button>
+            </div>
+
+            {/* ---------- A4 preview (unchanged) ---------- */}
+            <div
+                className="mx-auto bg-white shadow-xl"
+                style={{
+                    width: '210mm',
+                    minHeight: '297mm',
+                    padding: '14mm 14mm 16mm 14mm',
+                    boxSizing: 'border-box',
+                }}
+            >
+                <header className="flex flex-col items-center text-center border-b-2 border-[#a47d52] pb-5 mb-6">
+                    <img
+                        src={brokerCityLogo}
+                        alt="Broker City Properties"
+                        style={{
+                            height: '80px',
+                            objectFit: 'contain',
+                            marginBottom: '12px',
+                        }}
+                    />
+                    <h1
+                        className="font-extrabold text-[#a47d52]"
+                        style={{ fontSize: '20px', margin: 0, lineHeight: 1.5 }}
+                    >
+                        قسم المتابعة والجودة
+                    </h1>
+                    <h2
+                        className="font-bold text-gray-800"
+                        style={{ fontSize: '16px', marginTop: '6px', lineHeight: 1.6 }}
+                    >
+                        إرشادات تحويل حالات التواصل مع العملاء
+                    </h2>
+                </header>
+
+                <main className="space-y-2">
+                    {STAGES.map((stage) => (
+                        <div
+                            key={stage.num}
+                            className="rounded-lg overflow-hidden border border-slate-200"
+                            style={{ pageBreakInside: 'avoid' }}
+                        >
+                            <div
+                                className="px-3 py-2 flex items-center gap-2 font-extrabold"
+                                style={{
+                                    backgroundColor: `rgb(${stage.color.join(',')})`,
+                                    color: `rgb(${stage.textColor.join(',')})`,
+                                    fontSize: '13px',
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minWidth: '24px',
+                                        height: '24px',
+                                        borderRadius: '50%',
+                                        background: 'rgba(255,255,255,0.35)',
+                                        color: `rgb(${stage.textColor.join(',')})`,
+                                        fontWeight: 900,
+                                        fontSize: '12px',
+                                    }}
+                                >
+                                    {stage.num}
+                                </span>
+                                <span style={{ direction: 'ltr' }}>{stage.en}</span>
+                                <span className="mx-1">-</span>
+                                <span>{stage.ar}</span>
+                            </div>
+                            <div
+                                className="bg-white px-4 py-2 text-gray-700"
+                                style={{ fontSize: '12.5px', lineHeight: 1.75 }}
+                            >
+                                {stage.explain}
+                            </div>
+                        </div>
+                    ))}
+                </main>
+
+                <footer
+                    className="mt-8 pt-4 border-t border-slate-200 text-center text-slate-500"
+                    style={{ fontSize: '10px', lineHeight: 1.6 }}
+                >
+                    <div
+                        className="font-extrabold text-[#a47d52] tracking-wide"
+                        style={{ direction: 'ltr' }}
+                    >
+                        BROKER CITY PROPERTIES - L.L.C - S.P.C
+                    </div>
+                    <div style={{ direction: 'ltr' }}>
+                        P.O.BOX : 7833 Abu Dhabi - U.A.E &nbsp;|&nbsp; +971 50 2000 195 &nbsp;|&nbsp; ☎ +971 2 6666 101
+                    </div>
+                </footer>
+            </div>
+
+            <style>{`
+                @media print {
+                    .no-print { display: none !important; }
+                    body { background: white !important; margin: 0 !important; }
+                    @page { size: A4; margin: 0; }
+                }
+            `}</style>
+        </div>
     );
 };
 
-export default OfferSalesPDF;
-
-
-// // OfferSalesPDF.jsx
-// // npm install jspdf jspdf-autotable
-
-// import React, { useRef, useEffect, useState } from 'react';
-// import jsPDF from 'jspdf';
-// import autoTable from 'jspdf-autotable';
-// import logo from '../assets/images/logogo-removebg-old.png';
-
-// // =============================================================
-// // COMPONENT
-// // =============================================================
-
-// const OfferSalesPDF = ({ offerData, onGenerated }) => {
-//     // Prevents double-clicking the button from generating two PDFs
-//     const isGenerating = useRef(false);
-
-//     // Logo is loaded once as base64 so jsPDF can embed it
-//     const [logoBase64, setLogoBase64] = useState(null);
-
-//     // ---------------------------------------------------------
-//     // Load the logo file as a base64 string on mount
-//     // ---------------------------------------------------------
-//     useEffect(() => {
-//         let cancelled = false;
-
-//         const loadLogo = async () => {
-//             try {
-//                 const res = await fetch(logo);
-//                 const blob = await res.blob();
-//                 const reader = new FileReader();
-
-//                 reader.onloadend = () => {
-//                     if (!cancelled) {
-//                         setLogoBase64(reader.result);
-//                     }
-//                 };
-
-//                 reader.readAsDataURL(blob);
-//             } catch (err) {
-//                 console.error('Failed to load logo:', err);
-//             }
-//         };
-
-//         loadLogo();
-
-//         return () => {
-//             cancelled = true;
-//         };
-//     }, []);
-
-//     // =========================================================
-//     // DEFAULT DATA — override with the `offerData` prop
-//     // =========================================================
-//     const defaultData = {
-//         // ---- Header / greeting ----
-//         referenceNo: 'Villa Bawaba Elsharg / REF-PENDING',
-//         date: new Date().toLocaleDateString('en-GB'),
-//         recipientName: 'Abdulaziz Eidha Salmeen Hassan Aljaberi',
-//         developerName: 'Broker City Properties',
-//         projectName: 'Villa Bawaba Elsharg',
-
-//         // ---- Unit details ----
-//         unitNumber: '',
-//         unitType: 'Townhouse',
-//         unitModel: '3 Bedrooms',
-//         estimatedCompletion: '1/1/2027',
-
-//         // ---- Price & payment plan ----
-//         basePrice: 2550000,
-//         downPaymentPercent: 20,
-//         handoverPercent: 80,
-
-//         // ---- Additional fees ----
-//         municipalityFeePercent: 2, // رسوم بلدية
-//         officeFeePercent: 2,       // رسوم مكتب
-//         vatPercent: 5,             // 5% tax
-//         nocFee: 5000,              // NOC fixed AED
-
-//         currency: 'AED',
-//     };
-
-//     // Merge caller data on top of defaults
-//     const raw = { ...defaultData, ...(offerData || {}) };
-
-//     // =========================================================
-//     // CALCULATED AMOUNTS
-//     // =========================================================
-//     const calc = (() => {
-//         const base = Number(raw.basePrice || 0);
-
-//         // ---- Payment schedule amounts ----
-//         const downPaymentAmount =
-//             (base * Number(raw.downPaymentPercent || 0)) / 100;
-//         const handoverAmount =
-//             (base * Number(raw.handoverPercent || 0)) / 100;
-
-//         // ---- Additional fee amounts ----
-//         const municipalityFee =
-//             (base * Number(raw.municipalityFeePercent || 0)) / 100;
-//         const officeFee =
-//             (base * Number(raw.officeFeePercent || 0)) / 100;
-//         const vat = (base * Number(raw.vatPercent || 0)) / 100;
-//         const noc = Number(raw.nocFee || 0);
-
-//         // ---- Grand total ----
-//         const grandTotal =
-//             base + municipalityFee + officeFee + vat + noc;
-
-//         return {
-//             base,
-//             downPaymentAmount,
-//             handoverAmount,
-//             municipalityFee,
-//             officeFee,
-//             vat,
-//             noc,
-//             grandTotal,
-//         };
-//     })();
-
-//     // =========================================================
-//     // HELPERS
-//     // =========================================================
-
-//     // Format AED amounts with thousand separators and no decimals
-//     const formatAED = (n) =>
-//         Number(n || 0).toLocaleString('en-US', {
-//             minimumFractionDigits: 0,
-//             maximumFractionDigits: 0,
-//         });
-
-//     // Format a percentage without trailing ".0"
-//     // 20 → "20"   |   2 → "2"   |   12.5 → "12.5"
-//     const formatPercent = (n) => {
-//         const num = Number(n || 0);
-//         return Number.isInteger(num) ? String(num) : num.toFixed(1);
-//     };
-
-//     // =========================================================
-//     // COLORS
-//     // =========================================================
-//     const COLORS = {
-//         // ---- Page header (white background) ----
-//         headerBg: [255, 255, 255],
-//         headerText: [26, 47, 60],
-
-//         // ---- Table headers (gold — matches GRAND TOTAL) ----
-//         tableHeaderBg: [196, 152, 87],
-//         tableHeaderText: [255, 255, 255],
-
-//         // ---- Footer (darker gold — same family as table headers) ----
-//         footerBg: [138, 106, 68],
-//         footerText: [255, 255, 255],
-
-//         // ---- Misc ----
-//         accentGold: [196, 152, 87],
-//         accentDark: [26, 47, 60],
-//         darkGray: [80, 80, 80],
-//         white: [255, 255, 255],
-//         highlight: [245, 240, 230],
-//     };
-
-//     // =========================================================
-//     // GENERATE PDF
-//     // =========================================================
-//     const generatePDF = () => {
-//         // Guard against double-click
-//         if (isGenerating.current) return;
-//         isGenerating.current = true;
-
-//         try {
-//             // ---- Create a new A4 portrait document ----
-//             const doc = new jsPDF({
-//                 orientation: 'portrait',
-//                 unit: 'mm',
-//                 format: 'a4',
-//             });
-
-//             const pageW = doc.internal.pageSize.getWidth();  // 210
-//             const pageH = doc.internal.pageSize.getHeight(); // 297
-//             const margin = 15;
-//             const contentW = pageW - margin * 2;
-
-//             // =====================================================
-//             // 1) PAGE HEADER — white bg, logo only, no ref text
-//             // =====================================================
-//             const headerHeight = 36;
-
-//             // White background
-//             doc.setFillColor(...COLORS.headerBg);
-//             doc.rect(0, 0, pageW, headerHeight, 'F');
-
-//             // Gold separator line under the header
-//             doc.setDrawColor(...COLORS.accentGold);
-//             doc.setLineWidth(0.8);
-//             doc.line(0, headerHeight, pageW, headerHeight);
-
-//             // Logo — 65mm wide x 28mm tall, centered horizontally
-//             if (logoBase64) {
-//                 try {
-//                     const logoW = 65;
-//                     const logoH = 58;
-//                     const logoX = (pageW - logoW) / 2;
-//                     const logoY = (headerHeight - logoH) / 2;
-
-//                     doc.addImage(
-//                         logoBase64,
-//                         'PNG',
-//                         logoX,
-//                         logoY,
-//                         logoW,
-//                         logoH,
-//                         undefined,
-//                         'FAST'
-//                     );
-//                 } catch (err) {
-//                     console.error('Logo render error:', err);
-//                 }
-//             }
-
-//             // =====================================================
-//             // 2) TITLE BLOCK
-//             // =====================================================
-//             let cursorY = headerHeight + 14;
-
-//             doc.setTextColor(...COLORS.accentDark);
-//             doc.setFont('helvetica', 'bold');
-//             doc.setFontSize(20);
-//             doc.text('Offer Sales', margin, cursorY);
-
-//             cursorY += 8;
-
-//             // Reference No (left) + Date (right)
-//             doc.setFontSize(10);
-//             doc.setFont('helvetica', 'normal');
-//             doc.setTextColor(...COLORS.darkGray);
-
-//             doc.text(`Reference No: ${raw.referenceNo}`, margin, cursorY);
-//             doc.text(`Date: ${raw.date}`, pageW - margin, cursorY, {
-//                 align: 'right',
-//             });
-
-//             // =====================================================
-//             // 3) GREETING + INTRO PARAGRAPH
-//             // =====================================================
-//             cursorY += 12;
-
-//             doc.setFont('helvetica', 'bold');
-//             doc.setFontSize(12);
-//             doc.setTextColor(...COLORS.accentDark);
-//             doc.text(
-//                 `Dear ${raw.recipientName || '________'},`,
-//                 margin,
-//                 cursorY
-//             );
-
-//             cursorY += 8;
-
-//             doc.setFont('helvetica', 'normal');
-//             doc.setFontSize(10);
-//             doc.setTextColor(...COLORS.darkGray);
-
-//             doc.text(
-//                 `Thanks for your interest in ${raw.developerName}.`,
-//                 margin,
-//                 cursorY
-//             );
-
-//             cursorY += 6;
-//             doc.text(
-//                 `As discussed, please find below detailed offer for project: ${raw.projectName}.`,
-//                 margin,
-//                 cursorY
-//             );
-
-//             // =====================================================
-//             // 4) PROJECT INFO TABLE
-//             // =====================================================
-//             cursorY += 10;
-
-//             autoTable(doc, {
-//                 startY: cursorY,
-//                 margin: { left: margin, right: margin },
-//                 head: [[
-//                     'Project',
-//                     'Unit Type',
-//                     'Unit Model',
-//                     'Handover Date',
-//                     'Base Price (AED)',
-//                 ]],
-//                 body: [[
-//                     raw.projectName,
-//                     raw.unitType,
-//                     raw.unitModel,
-//                     raw.estimatedCompletion,
-//                     formatAED(calc.base),
-//                 ]],
-//                 theme: 'grid',
-//                 headStyles: {
-//                     fillColor: COLORS.tableHeaderBg,
-//                     textColor: COLORS.tableHeaderText,
-//                     fontSize: 9,
-//                     fontStyle: 'bold',
-//                     halign: 'center',
-//                 },
-//                 bodyStyles: {
-//                     fontSize: 9,
-//                     halign: 'center',
-//                     textColor: COLORS.darkGray,
-//                 },
-//                 alternateRowStyles: {
-//                     fillColor: [250, 250, 250],
-//                 },
-//             });
-
-//             cursorY = doc.lastAutoTable.finalY + 8;
-
-//             // =====================================================
-//             // 5) PAYMENT SCHEDULE TABLE
-//             // =====================================================
-//             doc.setFont('helvetica', 'bold');
-//             doc.setFontSize(11);
-//             doc.setTextColor(...COLORS.accentDark);
-//             doc.text('Schedule of Installment Payments', margin, cursorY);
-
-//             cursorY += 4;
-
-//             autoTable(doc, {
-//                 startY: cursorY,
-//                 margin: { left: margin, right: margin },
-//                 head: [[
-//                     'Inst.',
-//                     'Milestone',
-//                     'Percentage',
-//                     'Amount (AED)',
-//                 ]],
-//                 body: [
-//                     [
-//                         '1',
-//                         'Down Payment',
-//                         `${formatPercent(raw.downPaymentPercent)}%`,
-//                         formatAED(calc.downPaymentAmount),
-//                     ],
-//                     [
-//                         '2',
-//                         'Handover',
-//                         `${formatPercent(raw.handoverPercent)}%`,
-//                         formatAED(calc.handoverAmount),
-//                     ],
-//                     [
-//                         '',
-//                         'Total',
-//                         '100%',
-//                         formatAED(calc.base),
-//                     ],
-//                 ],
-//                 theme: 'grid',
-//                 headStyles: {
-//                     fillColor: COLORS.tableHeaderBg,
-//                     textColor: COLORS.tableHeaderText,
-//                     fontSize: 9,
-//                     fontStyle: 'bold',
-//                     halign: 'center',
-//                 },
-//                 bodyStyles: {
-//                     fontSize: 9,
-//                     halign: 'center',
-//                     textColor: COLORS.darkGray,
-//                 },
-//                 columnStyles: {
-//                     0: { cellWidth: 15, halign: 'center' },
-//                     1: { cellWidth: 80, halign: 'left' },
-//                     2: { cellWidth: 30, halign: 'center' },
-//                     3: { cellWidth: 55, halign: 'right' },
-//                 },
-//                 alternateRowStyles: {
-//                     fillColor: [250, 250, 250],
-//                 },
-//                 // Highlight the "Total" row in soft gold
-//                 didParseCell: (hook) => {
-//                     if (
-//                         hook.section === 'body' &&
-//                         hook.row.index === 2
-//                     ) {
-//                         hook.cell.styles.fontStyle = 'bold';
-//                         hook.cell.styles.fillColor = COLORS.highlight;
-//                     }
-//                 },
-//             });
-
-//             cursorY = doc.lastAutoTable.finalY + 8;
-
-//             // =====================================================
-//             // 6) ADDITIONAL FEES TABLE
-//             // =====================================================
-//             doc.setFont('helvetica', 'bold');
-//             doc.setFontSize(11);
-//             doc.setTextColor(...COLORS.accentDark);
-//             doc.text('Additional Fees', margin, cursorY);
-
-//             cursorY += 4;
-
-//             autoTable(doc, {
-//                 startY: cursorY,
-//                 margin: { left: margin, right: margin },
-//                 head: [[
-//                     'Fee',
-//                     'Percentage',
-//                     'Amount (AED)',
-//                 ]],
-//                 body: [
-//                     [
-//                         'Municipality Fee',
-//                         `${formatPercent(raw.municipalityFeePercent)}%`,
-//                         formatAED(calc.municipalityFee),
-//                     ],
-//                     [
-//                         'Office Fee',
-//                         `${formatPercent(raw.officeFeePercent)}%`,
-//                         formatAED(calc.officeFee),
-//                     ],
-//                     [
-//                         `VAT / Tax (${formatPercent(raw.vatPercent)}%)`,
-//                         `${formatPercent(raw.vatPercent)}%`,
-//                         formatAED(calc.vat),
-//                     ],
-//                     [
-//                         'NOC',
-//                         'Fixed',
-//                         formatAED(calc.noc),
-//                     ],
-//                 ],
-//                 theme: 'grid',
-//                 headStyles: {
-//                     fillColor: COLORS.tableHeaderBg,
-//                     textColor: COLORS.tableHeaderText,
-//                     fontSize: 9,
-//                     fontStyle: 'bold',
-//                     halign: 'center',
-//                 },
-//                 bodyStyles: {
-//                     fontSize: 9,
-//                     halign: 'center',
-//                     textColor: COLORS.darkGray,
-//                 },
-//                 columnStyles: {
-//                     0: { cellWidth: 90, halign: 'left' },
-//                     1: { cellWidth: 35, halign: 'center' },
-//                     2: { cellWidth: 55, halign: 'right' },
-//                 },
-//                 alternateRowStyles: {
-//                     fillColor: [250, 250, 250],
-//                 },
-//             });
-
-//             cursorY = doc.lastAutoTable.finalY + 8;
-
-//             // =====================================================
-//             // 7) GRAND TOTAL SUMMARY TABLE
-//             // =====================================================
-//             autoTable(doc, {
-//                 startY: cursorY,
-//                 margin: { left: margin, right: margin },
-//                 head: [[
-//                     'Description',
-//                     'Amount (AED)',
-//                 ]],
-//                 body: [
-//                     ['Base Price', formatAED(calc.base)],
-//                     [
-//                         `Municipality Fee (${formatPercent(raw.municipalityFeePercent)}%)`,
-//                         formatAED(calc.municipalityFee),
-//                     ],
-//                     [
-//                         `Office Fee (${formatPercent(raw.officeFeePercent)}%)`,
-//                         formatAED(calc.officeFee),
-//                     ],
-//                     [
-//                         `VAT (${formatPercent(raw.vatPercent)}%)`,
-//                         formatAED(calc.vat),
-//                     ],
-//                     ['NOC', formatAED(calc.noc)],
-//                     ['GRAND TOTAL', formatAED(calc.grandTotal)],
-//                 ],
-//                 theme: 'grid',
-//                 headStyles: {
-//                     fillColor: COLORS.tableHeaderBg,
-//                     textColor: COLORS.tableHeaderText,
-//                     fontSize: 10,
-//                     fontStyle: 'bold',
-//                     halign: 'center',
-//                 },
-//                 bodyStyles: {
-//                     fontSize: 10,
-//                     textColor: COLORS.darkGray,
-//                 },
-//                 columnStyles: {
-//                     0: { cellWidth: 120, halign: 'left' },
-//                     1: { cellWidth: 60, halign: 'right' },
-//                 },
-//                 // Highlight GRAND TOTAL row in gold with white text
-//                 didParseCell: (hook) => {
-//                     if (
-//                         hook.section === 'body' &&
-//                         hook.row.index === 5
-//                     ) {
-//                         hook.cell.styles.fontStyle = 'bold';
-//                         hook.cell.styles.fontSize = 12;
-//                         hook.cell.styles.fillColor = COLORS.accentGold;
-//                         hook.cell.styles.textColor = COLORS.white;
-//                     }
-//                 },
-//             });
-
-//             // =====================================================
-//             // 8) FOOTER — dark gold bg, left-aligned address, centered company
-//             // =====================================================
-//             const footerHeight = 16;
-//             const footerY = pageH - footerHeight;
-
-//             doc.setFillColor(...COLORS.footerBg);
-//             doc.rect(0, footerY, pageW, footerHeight, 'F');
-
-//             // ----- Line 1: address / phones (left-aligned with margin) -----
-//             doc.setTextColor(...COLORS.footerText);
-//             doc.setFont('helvetica', 'normal');
-//             doc.setFontSize(8);
-//             doc.text(
-//                 'P.O.BOX : 7833 Abu Dhabi - U.A.E   |   +971 50 2000 195   |   ☎ +971 2 6666 101',
-//                 margin,
-//                 footerY + 6,
-//                 { align: 'left' }
-//             );
-
-//             // ----- Line 2: company name (centered) -----
-//             doc.setFont('helvetica', 'bold');
-//             doc.setFontSize(9.5);
-//             doc.text(
-//                 'BROKER CITY PROPERTIES',
-//                 pageW / 2,
-//                 footerY + 12,
-//                 { align: 'center' }
-//             );
-
-//             // =====================================================
-//             // 9) SAVE THE PDF
-//             // =====================================================
-//             const fileName = `Offer-Sales-${raw.projectName.replace(/\s+/g, '-')}-${raw.date.replace(/\//g, '-')}.pdf`;
-//             doc.save(fileName);
-
-//             // Notify parent if callback was provided
-//             if (onGenerated) onGenerated(fileName);
-//         } catch (err) {
-//             console.error('PDF generation error:', err);
-//             alert('An error occurred while generating the PDF.');
-//         } finally {
-//             isGenerating.current = false;
-//         }
-//     };
-
-//     // =========================================================
-//     // UI — a single button that triggers the PDF generation
-//     // =========================================================
-//     return (
-//         <button
-//             type="button"
-//             onClick={generatePDF}
-//             className="cursor-pointer bg-[#007a84] hover:bg-[#00646c] text-white px-6 py-3 rounded-lg font-extrabold shadow-md hover:shadow-lg transition-all duration-300 hover:scale-[1.02] active:scale-95"
-//         >
-//             تحميل عرض الأسعار (PDF)
-//         </button>
-//     );
-// };
-
-// export default OfferSalesPDF;
+export default LeadsStagesGuide;

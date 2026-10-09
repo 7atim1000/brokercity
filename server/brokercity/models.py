@@ -1176,9 +1176,18 @@ class Monitor(models.Model):
     month = models.CharField(max_length=20, null=True, blank=True)
 
     lead_no = models.IntegerField(help_text="Lead No", null=True, blank=True)
+    
     agent = models.CharField(max_length=100, help_text="Agent name", null=True, blank=True)
+
+    agent_contact_duration = models.CharField(help_text="Agent contact duration", null=True, blank=True)
+    agent_assigned_duration = models.CharField(help_text="Agent contact duration", null=True, blank=True)
+    
     agent_lead_no = models.IntegerField(help_text="Agent Lead No", null=True, blank=True)
-    agent_contact_duration = models.IntegerField(help_text="Agent contact duration", null=True, blank=True)
+    lead_reassigned_no = models.IntegerField(help_text="Lead No", null=True, blank=True)
+
+    
+    agent_contact_comment = models.CharField(max_length=255, help_text="Agent Contact Comment", null=True, blank=True)
+    agent_reassigned_comment = models.CharField(max_length=255, help_text="Agent Contact Comment", null=True, blank=True)
 
     draws = models.FloatField(null=True, blank=True)
     draws_no = models.IntegerField(help_text="Draws No", null=True, blank=True)

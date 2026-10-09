@@ -1884,17 +1884,62 @@ class MonitorSerializer(serializers.ModelSerializer):
 
 
 class MonitorCreateSerializer(serializers.ModelSerializer):
+    # Make every optional field explicitly not-required so the
+    # frontend can POST partial payloads without triggering 400s.
+    date = serializers.DateField(required=False, allow_null=True)
+    month = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+    lead_no = serializers.IntegerField(required=False, allow_null=True)
+    lead_reassigned_no = serializers.IntegerField(required=False, allow_null=True)
+
+    agent = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    agent_lead_no = serializers.IntegerField(required=False, allow_null=True)
+
+    # ✅ Now CharField (allows values like "45 min" / "1h 20m" / free text)
+    agent_contact_duration = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+    agent_contact_comment = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+
+    # ✅ NEW fields — also CharField now
+    agent_assigned_duration = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+    agent_reassigned_comment = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+
+    draws = serializers.FloatField(required=False, allow_null=True)
+    draws_no = serializers.IntegerField(required=False, allow_null=True)
+    draws_cause = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True
+    )
+
     class Meta:
         model = Monitor
         fields = '__all__'
         read_only_fields = ('id', 'created_at', 'updated_at')
 
     def validate(self, attrs):
-        # Example validation: draws_no cannot be negative
-        if attrs.get('draws_no') is not None and attrs['draws_no'] < 0:
-            raise serializers.ValidationError({"draws_no": "draws_no cannot be negative."})
-        return attrs
+        # Non-negative checks — only for the fields that are STILL integers
+        non_negative_fields = [
+            'lead_no',
+            'lead_reassigned_no',
+            'agent_lead_no',
+            'draws_no',
+            # ❌ Removed: agent_contact_duration, agent_assigned_duration
+            #    (they are CharField now — no numeric check possible)
+        ]
+        for field in non_negative_fields:
+            val = attrs.get(field)
+            if val is not None and val < 0:
+                raise serializers.ValidationError(
+                    {field: f"{field} cannot be negative."}
+                )
 
+        return attrs
 
         
 # def validate(self, attrs):

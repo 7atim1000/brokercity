@@ -31,6 +31,7 @@ import Signup from './pages/en/Signup'
 import OfferSalesPDF from './pages/OfferSalePdf';
 
 import ArMonitor from './pages/ar/Monitor';
+import LeadsStagesGuide from './pages/ar/LeadsStagesGuide';
 
 
 
@@ -75,6 +76,7 @@ function App() {
                 
                 <Route path="/offer-sale" element={<OfferSalesPDF />}/>
                 <Route path="/ar-sale-offer" element={<ArSaleOffer />}/>
+                <Route path="/leadstagesguide" element={<LeadsStagesGuide />}/>
 
                  {/* Monitoring */}
                 <Route path="/ar-monitor" element={<ArMonitor />}/>
