@@ -20,227 +20,364 @@ const PRINT_FONT =
     '"Cairo", "Tajawal", "Segoe UI", "Tahoma", "Arial", sans-serif';
 
 // =============================================================
+// HELPERS
+// =============================================================
+const isEmptyPdfValue = (v) => {
+    if (v === null || v === undefined) return true;
+    const s = String(v).trim();
+    return s === '' || s === '—' || s === '-';
+};
+
+// Row is "Absence" when ملاحظات (agent_contact_comment) is empty / —
+const isAbsenceRow = (it) =>
+    isEmptyPdfValue(it.agent_contact_comment);
+
+// Row should sink to bottom + gray bg when
+// التاريخ + الشهر + الوكيل + ملاحظات all filled
+// AND the other (numeric/optional) columns are all empty / —
+const isSinkBottomRow = (it) => {
+    const hasDate = !isEmptyPdfValue(it.date);
+    const hasMonth = !isEmptyPdfValue(it.month);
+    const hasAgent = !isEmptyPdfValue(it.agent);
+    const hasComment = !isEmptyPdfValue(it.agent_contact_comment);
+
+    if (!(hasDate && hasMonth && hasAgent && hasComment)) return false;
+
+    const otherColumnsEmpty =
+        isEmptyPdfValue(it.agent_lead_no) &&
+        isEmptyPdfValue(it.lead_reassigned_no) &&
+        isEmptyPdfValue(it.agent_contact_duration) &&
+        isEmptyPdfValue(it.draws_no) &&
+        isEmptyPdfValue(it.draws_cause);
+
+    return otherColumnsEmpty;
+};
+
+// Extract unique agent names from items (trimmed, sorted, deduped)
+const getUniqueAgentNames = (items) => {
+    const set = new Set();
+    items.forEach((it) => {
+        const name =
+            it.agent !== null && it.agent !== undefined
+                ? String(it.agent).trim()
+                : '';
+        if (name && name !== '—' && name !== '-') set.add(name);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+};
+
+// Compare two date strings ascending (YYYY-MM-DD).
+const compareDateAsc = (a, b) => {
+    const da = isEmptyPdfValue(a) ? null : String(a).trim();
+    const db = isEmptyPdfValue(b) ? null : String(b).trim();
+
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da.localeCompare(db);
+};
+
+// =============================================================
 // HIDDEN PDF RENDER TARGET
 // A4 LANDSCAPE = 1123 x 794 px @ 96dpi
 // =============================================================
 const PdfRenderTarget = forwardRef(
-    ({ items, totalLeadNo, totalReassignedLeadNo, generatedAt }, ref) => (
-        <div
-            ref={ref}
-            dir="rtl"
-            lang="ar"
-            data-pdf-root="true"
-            style={{
-                width: '1123px',
-                padding: '18px 22px 24px 22px',
-                background: '#ffffff',
-                boxSizing: 'border-box',
-                fontFamily: PRINT_FONT,
-                color: '#1f2937',
-                position: 'fixed',
-                left: '-10000px',
-                top: 0,
-                zIndex: -1,
-            }}
-        >
-            {/* ================= HEADER ================= */}
-            <header
-                data-pdf-block="header"
+    ({
+        items,
+        totalAgentLeadNo,
+        totalReassignedLeadNo,
+        totalDrawsNo,
+        generatedAt,
+    }, ref) => {
+        const agentNames = getUniqueAgentNames(items);
+        const agentDisplay =
+            agentNames.length > 0 ? agentNames.join('، ') : '—';
+
+        return (
+            <div
+                ref={ref}
+                dir="rtl"
+                lang="ar"
+                data-pdf-root="true"
                 style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    textAlign: 'center',
-                    borderBottom: '2px solid #a47d52',
-                    paddingBottom: '8px',
-                    marginBottom: '10px',
+                    width: '1123px',
+                    padding: '18px 22px 24px 22px',
+                    background: '#ffffff',
+                    boxSizing: 'border-box',
+                    fontFamily: PRINT_FONT,
+                    color: '#1f2937',
+                    position: 'fixed',
+                    left: '-10000px',
+                    top: 0,
+                    zIndex: -1,
                 }}
             >
-                <h1
+                {/* ================= HEADER ================= */}
+                <header
+                    data-pdf-block="header"
                     style={{
-                        color: '#a47d52',
-                        fontSize: '20px',
-                        fontWeight: 800,
-                        margin: 0,
-                        lineHeight: 1.25,
-                        fontFamily: PRINT_FONT,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        textAlign: 'center',
+                        borderBottom: '2px solid #a47d52',
+                        paddingBottom: '8px',
+                        marginBottom: '10px',
                     }}
                 >
-                    {COMPANY_NAME_EN} — {COMPANY_NAME_AR}
-                </h1>
-                <h2
-                    style={{
-                        color: '#1f2937',
-                        fontSize: '16px',
-                        fontWeight: 700,
-                        marginTop: '4px',
-                        lineHeight: 1.3,
-                        fontFamily: PRINT_FONT,
-                    }}
-                >
-                    Monitor Report — تقرير المراقبة
-                </h2>
-                <p
-                    style={{
-                        color: '#6b7280',
-                        fontSize: '12px',
-                        marginTop: '4px',
-                        fontFamily: PRINT_FONT,
-                    }}
-                >
-                    Generated: {generatedAt}
-                </p>
-            </header>
+                    <h1
+                        style={{
+                            color: '#a47d52',
+                            fontSize: '20px',
+                            fontWeight: 800,
+                            margin: 0,
+                            lineHeight: 1.25,
+                            fontFamily: PRINT_FONT,
+                        }}
+                    >
+                        {COMPANY_NAME_EN} — {COMPANY_NAME_AR}
+                    </h1>
+                    <h2
+                        style={{
+                            color: '#1f2937',
+                            fontSize: '16px',
+                            fontWeight: 700,
+                            marginTop: '4px',
+                            lineHeight: 1.3,
+                            fontFamily: PRINT_FONT,
+                        }}
+                    >
+                        Monitor Report — تقرير المراقبة
+                    </h2>
 
-            {/* ================= TABLE (RTL) ================= */}
-            <main data-pdf-block="body">
-                <table
-                    style={{
-                        width: '100%',
-                        borderCollapse: 'collapse',
-                        tableLayout: 'fixed',
-                        fontFamily: PRINT_FONT,
-                        direction: 'rtl',
-                    }}
-                >
-                    <thead>
-                        <tr>
-                            <th style={thPdf}>#</th>
-                            <th style={thPdf}>التاريخ</th>
-                            <th style={thPdf}>الشهر</th>
-                            <th style={thPdf}>الوكيل</th>
-                            <th style={thPdf}>عدد ليدات الوكيل</th>
-                            <th style={thPdf}>ليدات معاد توزيعها</th>
-                            <th style={thPdf}>استجابة قبول الطلبات</th>
-                            <th style={thPdf}>ملاحظات</th>
-                            <th style={thPdf}>عدد السحوبات</th>
-                            <th style={thPdf}>سبب السحب</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {items.map((it, index) => {
-                            const durationNum = Number(it.agent_contact_duration);
-                            const isLongDuration =
-                                it.agent_contact_duration != null &&
-                                !isNaN(durationNum) &&
-                                durationNum > 30;
+                    {/* 👇 AGENT NAME LINE — bigger font */}
+                    <p
+                        style={{
+                            color: '#a47d52',
+                            fontSize: '18px',
+                            fontWeight: 800,
+                            marginTop: '8px',
+                            marginBottom: 0,
+                            fontFamily: PRINT_FONT,
+                        }}
+                    >
+                        الوكيل: {agentDisplay}
+                    </p>
 
-                            return (
-                                <tr
-                                    key={it.id}
-                                    data-pdf-row="true"
-                                    style={{
-                                        background:
-                                            index % 2 === 0 ? '#FFFFFF' : '#FAF7F0',
-                                    }}
-                                >
-                                    <td style={tdPdf}>{index + 1}</td>
-                                    <td style={tdPdf}>{it.date || '—'}</td>
-                                    <td style={tdPdf}>{it.month || '—'}</td>
-                                    <td style={tdPdf}>{it.agent || '—'}</td>
-                                    <td style={tdPdf}>
-                                        {it.agent_lead_no ?? '—'}
-                                    </td>
-                                    <td style={tdPdf}>
-                                        {it.lead_reassigned_no ?? '—'}
-                                    </td>
-                                    <td
+                    <p
+                        style={{
+                            color: '#6b7280',
+                            fontSize: '12px',
+                            marginTop: '4px',
+                            fontFamily: PRINT_FONT,
+                        }}
+                    >
+                        Generated: {generatedAt}
+                    </p>
+                </header>
+
+                {/* ================= TABLE (RTL) ================= */}
+                <main data-pdf-block="body">
+                    <table
+                        style={{
+                            width: '100%',
+                            borderCollapse: 'collapse',
+                            tableLayout: 'fixed',
+                            fontFamily: PRINT_FONT,
+                            direction: 'rtl',
+                        }}
+                    >
+                        <thead>
+                            <tr>
+                                <th style={thPdf}>#</th>
+                                <th style={thPdf}>التاريخ</th>
+                                <th style={thPdf}>الشهر</th>
+                                <th style={thPdf}>الوكيل</th>
+                                <th style={thPdf}>عدد ليدات الوكيل</th>
+                                <th style={thPdf}>ليدات معاد توزيعها</th>
+                                <th style={thPdf}>استجابة قبول الطلبات</th>
+                                <th style={thPdf}>ملاحظات</th>
+                                <th style={thPdf}>عدد السحوبات</th>
+                                <th style={thPdf}>سبب السحب</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {items.map((it, index) => {
+                                const durationNum = Number(it.agent_contact_duration);
+                                const isLongDuration =
+                                    it.agent_contact_duration != null &&
+                                    !isNaN(durationNum) &&
+                                    durationNum > 30;
+
+                                const absence = isAbsenceRow(it);
+                                const sinkBottom = isSinkBottomRow(it);
+
+                                const rowBg = sinkBottom
+                                    ? '#d1d5db' // bg-gray-300
+                                    : index % 2 === 0
+                                    ? '#FFFFFF'
+                                    : '#FAF7F0';
+
+                                return (
+                                    <tr
+                                        key={it.id}
+                                        data-pdf-row="true"
                                         style={{
-                                            ...tdPdf,
-                                            color: isLongDuration
-                                                ? '#dc2626'
-                                                : '#000',
-                                            fontWeight: isLongDuration
-                                                ? 800
-                                                : 500,
+                                            background: rowBg,
+                                            position: 'relative',
                                         }}
                                     >
-                                        {it.agent_contact_duration != null
-                                            ? `${it.agent_contact_duration} دقيقة`
-                                            : '—'}
-                                    </td>
-                                    <td
-                                        style={{
-                                            ...tdPdf,
-                                            textAlign: 'right',
-                                            wordBreak: 'break-word',
-                                        }}
-                                    >
-                                        {it.agent_contact_comment || '—'}
-                                    </td>
-
-                                    <td
-                                        style={{
-                                            ...tdPdf,
-                                            color:
-                                                it.draws_no != null
+                                        <td style={tdPdf}>{index + 1}</td>
+                                        <td style={tdPdf}>{it.date || '—'}</td>
+                                        <td style={tdPdf}>{it.month || '—'}</td>
+                                        <td style={tdPdf}>{it.agent || '—'}</td>
+                                        <td style={tdPdf}>
+                                            {it.agent_lead_no ?? '—'}
+                                        </td>
+                                        <td style={tdPdf}>
+                                            {it.lead_reassigned_no ?? '—'}
+                                        </td>
+                                        <td
+                                            style={{
+                                                ...tdPdf,
+                                                color: isLongDuration
                                                     ? '#dc2626'
                                                     : '#000',
-                                            fontWeight:
-                                                it.draws_no != null
+                                                fontWeight: isLongDuration
                                                     ? 800
                                                     : 500,
-                                        }}
-                                    >
-                                        {it.draws_no ?? '—'}
-                                    </td>
-                                    <td
-                                        style={{
-                                            ...tdPdf,
-                                            textAlign: 'right',
-                                            wordBreak: 'break-word',
-                                        }}
-                                    >
-                                        {it.draws_cause || '—'}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                    <tfoot>
-                        <tr style={{ background: '#e6d5c0' }}>
-                            <td
-                                colSpan={3}
-                                style={{
-                                    ...tdFooterPdf,
-                                    textAlign: 'right',
-                                }}
-                            >
-                                المجموع الكلي — Gross Total
-                            </td>
-                            <td style={tdFooterPdf}></td>
-                            <td
-                                style={{
-                                    ...tdFooterPdf,
-                                    color: '#a47d52',
-                                }}
-                            >
-                                {totalLeadNo}
-                            </td>
-                            <td
-                                style={{
-                                    ...tdFooterPdf,
-                                    color: '#a47d52',
-                                }}
-                            >
-                                {totalReassignedLeadNo}
-                            </td>
-                            {/* Empty cells for: contact_duration, contact_comment,
-                                draws_no, draws_cause */}
-                            <td style={tdFooterPdf}></td>
-                            <td style={tdFooterPdf}></td>
-                            <td style={tdFooterPdf}></td>
-                            <td style={tdFooterPdf}></td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </main>
-        </div>
-    )
+                                            }}
+                                        >
+                                            {it.agent_contact_duration != null
+                                                ? `${it.agent_contact_duration} دقيقة`
+                                                : '—'}
+                                        </td>
+                                        <td
+                                            style={{
+                                                ...tdPdf,
+                                                textAlign: 'right',
+                                                wordBreak: 'break-word',
+                                            }}
+                                        >
+                                            {it.agent_contact_comment || '—'}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                ...tdPdf,
+                                                color:
+                                                    it.draws_no != null
+                                                        ? '#dc2626'
+                                                        : '#000',
+                                                fontWeight:
+                                                    it.draws_no != null
+                                                        ? 800
+                                                        : 500,
+                                            }}
+                                        >
+                                            {it.draws_no ?? '—'}
+                                        </td>
+                                        <td
+                                            style={{
+                                                ...tdPdf,
+                                                textAlign: 'right',
+                                                wordBreak: 'break-word',
+                                            }}
+                                        >
+                                            {it.draws_cause || '—'}
+                                        </td>
+
+                                        {/* === TRANSPARENT "Absence" OVERLAY === */}
+                                        {absence && (
+                                            <td
+                                                colSpan={10}
+                                                style={{
+                                                    position: 'absolute',
+                                                    inset: 0,
+                                                    display: 'flex',
+                                                    alignItems: 'flex-start',
+                                                    justifyContent: 'center',
+                                                    pointerEvents: 'none',
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    padding: '2px 20px 14px 20px',
+                                                    margin: 0,
+                                                }}
+                                            >
+                                                <span
+                                                    style={{
+                                                        color: '#c83c3c',
+                                                        opacity: 0.22,
+                                                        fontSize: '30px',
+                                                        fontWeight: 900,
+                                                        letterSpacing: '8px',
+                                                        textTransform: 'uppercase',
+                                                        fontFamily: PRINT_FONT,
+                                                        userSelect: 'none',
+                                                        lineHeight: 1,
+                                                        display: 'inline-block',
+                                                        padding: 0,
+                                                        margin: 0,
+                                                    }}
+                                                >
+                                                    No Leads
+                                                </span>
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                        <tfoot>
+                            <tr style={{ background: '#e6d5c0' }}>
+                                <td
+                                    colSpan={3}
+                                    style={{
+                                        ...tdFooterPdf,
+                                        textAlign: 'right',
+                                    }}
+                                >
+                                    المجموع الكلي — Gross Total
+                                </td>
+                                <td style={tdFooterPdf}></td>
+                                <td
+                                    style={{
+                                        ...tdFooterPdf,
+                                        color: '#a47d52',
+                                    }}
+                                >
+                                    {totalAgentLeadNo}
+                                </td>
+                                <td
+                                    style={{
+                                        ...tdFooterPdf,
+                                        color: '#a47d52',
+                                    }}
+                                >
+                                    {totalReassignedLeadNo}
+                                </td>
+                                <td style={tdFooterPdf}></td>
+                                <td style={tdFooterPdf}></td>
+                                <td
+                                    style={{
+                                        ...tdFooterPdf,
+                                        color: '#a47d52',
+                                    }}
+                                >
+                                    {totalDrawsNo}
+                                </td>
+                                <td style={tdFooterPdf}></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </main>
+            </div>
+        );
+    }
 );
 PdfRenderTarget.displayName = 'PdfRenderTarget';
 
-// ✅ Increased header font size + padding (unchanged)
+// ✅ Header cell style (unchanged)
 const thPdf = {
     border: '1px solid #000',
     padding: '10px 8px',
@@ -253,16 +390,16 @@ const thPdf = {
     whiteSpace: 'pre-line',
 };
 
-// ✅ Increased row font size + padding (unchanged)
+// ✅ Body cell style — increased font size
 const tdPdf = {
     border: '1px solid #ccc',
-    padding: '10px 8px',
-    fontSize: 12,
+    padding: '12px 8px',
+    fontSize: 15,
     color: '#000',
     textAlign: 'center',
     fontFamily: PRINT_FONT,
     wordBreak: 'break-word',
-    lineHeight: 1.5,
+    lineHeight: 1.6,
 };
 
 // ✅ Footer cell style (unchanged)
@@ -611,12 +748,40 @@ const Monitor = () => {
     };
 
     // ---------- Totals ----------
-    const totalLeadNo = items.reduce((sum, it) => sum + (Number(it.lead_no) || 0), 0);
+    const totalAgentLeadNo = items.reduce(
+        (sum, it) => sum + (Number(it.agent_lead_no) || 0),
+        0
+    );
+
     const totalReassignedLeadNo = items.reduce(
         (sum, it) => sum + (Number(it.lead_reassigned_no) || 0),
         0
     );
+
+    // عدد السحوبات  →  sum of draws_no
+    const totalDrawsNo = items.reduce(
+        (sum, it) => sum + (Number(it.draws_no) || 0),
+        0
+    );
+
     const printGeneratedAt = new Date().toLocaleString('ar-EG');
+
+    // ---------- SORTED ITEMS FOR PDF ----------
+    // 1) normal rows sorted by date ASC (oldest → newest)
+    // 2) then sink-to-bottom rows appended at the end
+    const sortedItemsForPdf = (() => {
+        const normal = [];
+        const sink = [];
+        items.forEach((it) => {
+            if (isSinkBottomRow(it)) sink.push(it);
+            else normal.push(it);
+        });
+
+        normal.sort((a, b) => compareDateAsc(a.date, b.date));
+        sink.sort((a, b) => compareDateAsc(a.date, b.date));
+
+        return [...normal, ...sink];
+    })();
 
     // ---------- LOADING ----------
     if (loading) {
@@ -842,9 +1007,10 @@ const Monitor = () => {
             {pdfReady && (
                 <PdfRenderTarget
                     ref={renderRef}
-                    items={items}
-                    totalLeadNo={totalLeadNo}
+                    items={sortedItemsForPdf}
+                    totalAgentLeadNo={totalAgentLeadNo}
                     totalReassignedLeadNo={totalReassignedLeadNo}
+                    totalDrawsNo={totalDrawsNo}
                     generatedAt={printGeneratedAt}
                 />
             )}
@@ -862,8 +1028,8 @@ const Monitor = () => {
     );
 };
 
-export default Monitor;
 
+export default Monitor;
 
 
 // import React, { useState, useEffect, useRef, forwardRef } from 'react';
@@ -888,226 +1054,352 @@ export default Monitor;
 //     '"Cairo", "Tajawal", "Segoe UI", "Tahoma", "Arial", sans-serif';
 
 // // =============================================================
+// // HELPERS
+// // =============================================================
+// const isEmptyPdfValue = (v) => {
+//     if (v === null || v === undefined) return true;
+//     const s = String(v).trim();
+//     return s === '' || s === '—' || s === '-';
+// };
+
+// // Row is "Absence" when ملاحظات (agent_contact_comment) is empty / —
+// const isAbsenceRow = (it) =>
+//     isEmptyPdfValue(it.agent_contact_comment);
+
+// // Row should sink to bottom + gray bg when
+// // التاريخ + الشهر + الوكيل + ملاحظات all filled
+// // AND the other (numeric/optional) columns are all empty / —
+// const isSinkBottomRow = (it) => {
+//     const hasDate = !isEmptyPdfValue(it.date);
+//     const hasMonth = !isEmptyPdfValue(it.month);
+//     const hasAgent = !isEmptyPdfValue(it.agent);
+//     const hasComment = !isEmptyPdfValue(it.agent_contact_comment);
+
+//     if (!(hasDate && hasMonth && hasAgent && hasComment)) return false;
+
+//     const otherColumnsEmpty =
+//         isEmptyPdfValue(it.agent_lead_no) &&
+//         isEmptyPdfValue(it.lead_reassigned_no) &&
+//         isEmptyPdfValue(it.agent_contact_duration) &&
+//         isEmptyPdfValue(it.draws_no) &&
+//         isEmptyPdfValue(it.draws_cause);
+
+//     return otherColumnsEmpty;
+// };
+
+// // Extract unique agent names from items (trimmed, sorted, deduped)
+// const getUniqueAgentNames = (items) => {
+//     const set = new Set();
+//     items.forEach((it) => {
+//         const name =
+//             it.agent !== null && it.agent !== undefined
+//                 ? String(it.agent).trim()
+//                 : '';
+//         if (name && name !== '—' && name !== '-') set.add(name);
+//     });
+//     return Array.from(set).sort((a, b) => a.localeCompare(b));
+// };
+
+// // Compare two date strings ascending (YYYY-MM-DD).
+// // Missing/invalid dates go to the end.
+// const compareDateAsc = (a, b) => {
+//     const da = isEmptyPdfValue(a) ? null : String(a).trim();
+//     const db = isEmptyPdfValue(b) ? null : String(b).trim();
+
+//     if (da === null && db === null) return 0;
+//     if (da === null) return 1;
+//     if (db === null) return -1;
+//     return da.localeCompare(db);
+// };
+
+// // =============================================================
 // // HIDDEN PDF RENDER TARGET
 // // A4 LANDSCAPE = 1123 x 794 px @ 96dpi
 // // =============================================================
 // const PdfRenderTarget = forwardRef(
-//     ({ items, totalLeadNo, totalReassignedLeadNo, generatedAt }, ref) => (
-//         <div
-//             ref={ref}
-//             dir="rtl"
-//             lang="ar"
-//             data-pdf-root="true"
-//             style={{
-//                 width: '1123px',
-//                 padding: '18px 22px 24px 22px',
-//                 background: '#ffffff',
-//                 boxSizing: 'border-box',
-//                 fontFamily: PRINT_FONT,
-//                 color: '#1f2937',
-//                 position: 'fixed',
-//                 left: '-10000px',
-//                 top: 0,
-//                 zIndex: -1,
-//             }}
-//         >
-//             {/* ================= HEADER ================= */}
-//             <header
-//                 data-pdf-block="header"
+//     ({ items, totalAgentLeadNo, totalReassignedLeadNo, generatedAt }, ref) => {
+//         const agentNames = getUniqueAgentNames(items);
+//         const agentDisplay =
+//             agentNames.length > 0 ? agentNames.join('، ') : '—';
+
+//         return (
+//             <div
+//                 ref={ref}
+//                 dir="rtl"
+//                 lang="ar"
+//                 data-pdf-root="true"
 //                 style={{
-//                     display: 'flex',
-//                     flexDirection: 'column',
-//                     alignItems: 'center',
-//                     textAlign: 'center',
-//                     borderBottom: '2px solid #a47d52',
-//                     paddingBottom: '8px',
-//                     marginBottom: '10px',
+//                     width: '1123px',
+//                     padding: '18px 22px 24px 22px',
+//                     background: '#ffffff',
+//                     boxSizing: 'border-box',
+//                     fontFamily: PRINT_FONT,
+//                     color: '#1f2937',
+//                     position: 'fixed',
+//                     left: '-10000px',
+//                     top: 0,
+//                     zIndex: -1,
 //                 }}
 //             >
-//                 <h1
+//                 {/* ================= HEADER ================= */}
+//                 <header
+//                     data-pdf-block="header"
 //                     style={{
-//                         color: '#a47d52',
-//                         fontSize: '20px',
-//                         fontWeight: 800,
-//                         margin: 0,
-//                         lineHeight: 1.25,
-//                         fontFamily: PRINT_FONT,
+//                         display: 'flex',
+//                         flexDirection: 'column',
+//                         alignItems: 'center',
+//                         textAlign: 'center',
+//                         borderBottom: '2px solid #a47d52',
+//                         paddingBottom: '8px',
+//                         marginBottom: '10px',
 //                     }}
 //                 >
-//                     {COMPANY_NAME_EN} — {COMPANY_NAME_AR}
-//                 </h1>
-//                 <h2
-//                     style={{
-//                         color: '#1f2937',
-//                         fontSize: '16px',
-//                         fontWeight: 700,
-//                         marginTop: '4px',
-//                         lineHeight: 1.3,
-//                         fontFamily: PRINT_FONT,
-//                     }}
-//                 >
-//                     Monitor Report — تقرير المراقبة
-//                 </h2>
-//                 <p
-//                     style={{
-//                         color: '#6b7280',
-//                         fontSize: '12px',
-//                         marginTop: '4px',
-//                         fontFamily: PRINT_FONT,
-//                     }}
-//                 >
-//                     Generated: {generatedAt}
-//                 </p>
-//             </header>
+//                     <h1
+//                         style={{
+//                             color: '#a47d52',
+//                             fontSize: '20px',
+//                             fontWeight: 800,
+//                             margin: 0,
+//                             lineHeight: 1.25,
+//                             fontFamily: PRINT_FONT,
+//                         }}
+//                     >
+//                         {COMPANY_NAME_EN} — {COMPANY_NAME_AR}
+//                     </h1>
+//                     <h2
+//                         style={{
+//                             color: '#1f2937',
+//                             fontSize: '16px',
+//                             fontWeight: 700,
+//                             marginTop: '4px',
+//                             lineHeight: 1.3,
+//                             fontFamily: PRINT_FONT,
+//                         }}
+//                     >
+//                         Monitor Report — تقرير المراقبة
+//                     </h2>
 
-//             {/* ================= TABLE (RTL) ================= */}
-//             <main data-pdf-block="body">
-//                 <table
-//                     style={{
-//                         width: '100%',
-//                         borderCollapse: 'collapse',
-//                         tableLayout: 'fixed',
-//                         fontFamily: PRINT_FONT,
-//                         direction: 'rtl',
-//                     }}
-//                 >
-//                     <thead>
-//                         <tr>
-//                             <th style={thPdf}>#</th>
-//                             <th style={thPdf}>التاريخ</th>
-//                             <th style={thPdf}>الشهر</th>
-//                             <th style={thPdf}>عدد ليدات الوكيل</th>
-//                             <th style={thPdf}>ليدات معاد توزيعها</th>
-//                             <th style={thPdf}>الوكيل</th>
-//                             <th style={thPdf}>استجابة قبول الطلبات</th>
-//                             <th style={thPdf}>ملاحظات</th>
-//                             <th style={thPdf}>عدد السحوبات</th>
-//                             <th style={thPdf}>سبب السحب</th>
-//                         </tr>
-//                     </thead>
-//                     <tbody>
-//                         {items.map((it, index) => {
-//                             const durationNum = Number(it.agent_contact_duration);
-//                             const isLongDuration =
-//                                 it.agent_contact_duration != null &&
-//                                 !isNaN(durationNum) &&
-//                                 durationNum > 30;
+//                     {/* 👇 AGENT NAME LINE — bigger font */}
+//                     <p
+//                         style={{
+//                             color: '#a47d52',
+//                             fontSize: '18px',
+//                             fontWeight: 800,
+//                             marginTop: '8px',
+//                             marginBottom: 0,
+//                             fontFamily: PRINT_FONT,
+//                         }}
+//                     >
+//                         الوكيل: {agentDisplay}
+//                     </p>
 
-//                             return (
-//                                 <tr
-//                                     key={it.id}
-//                                     data-pdf-row="true"
-//                                     style={{
-//                                         background:
-//                                             index % 2 === 0 ? '#FFFFFF' : '#FAF7F0',
-//                                     }}
-//                                 >
-//                                     <td style={tdPdf}>{index + 1}</td>
-//                                     <td style={tdPdf}>{it.date || '—'}</td>
-//                                     <td style={tdPdf}>{it.month || '—'}</td>
-//                                     <td style={tdPdf}>
-//                                         {it.agent_lead_no ?? '—'}
-//                                     </td>
-//                                     <td style={tdPdf}>
-//                                         {it.lead_reassigned_no ?? '—'}
-//                                     </td>
-//                                     <td style={tdPdf}>{it.agent || '—'}</td>
-//                                     <td
+//                     <p
+//                         style={{
+//                             color: '#6b7280',
+//                             fontSize: '12px',
+//                             marginTop: '4px',
+//                             fontFamily: PRINT_FONT,
+//                         }}
+//                     >
+//                         Generated: {generatedAt}
+//                     </p>
+//                 </header>
+
+//                 {/* ================= TABLE (RTL) ================= */}
+//                 <main data-pdf-block="body">
+//                     <table
+//                         style={{
+//                             width: '100%',
+//                             borderCollapse: 'collapse',
+//                             tableLayout: 'fixed',
+//                             fontFamily: PRINT_FONT,
+//                             direction: 'rtl',
+//                         }}
+//                     >
+//                         <thead>
+//                             <tr>
+//                                 <th style={thPdf}>#</th>
+//                                 <th style={thPdf}>التاريخ</th>
+//                                 <th style={thPdf}>الشهر</th>
+//                                 <th style={thPdf}>الوكيل</th>
+//                                 <th style={thPdf}>عدد ليدات الوكيل</th>
+//                                 <th style={thPdf}>ليدات معاد توزيعها</th>
+//                                 <th style={thPdf}>استجابة قبول الطلبات</th>
+//                                 <th style={thPdf}>ملاحظات</th>
+//                                 <th style={thPdf}>عدد السحوبات</th>
+//                                 <th style={thPdf}>سبب السحب</th>
+//                             </tr>
+//                         </thead>
+//                         <tbody>
+//                             {items.map((it, index) => {
+//                                 const durationNum = Number(it.agent_contact_duration);
+//                                 const isLongDuration =
+//                                     it.agent_contact_duration != null &&
+//                                     !isNaN(durationNum) &&
+//                                     durationNum > 30;
+
+//                                 const absence = isAbsenceRow(it);
+//                                 const sinkBottom = isSinkBottomRow(it);
+
+//                                 const rowBg = sinkBottom
+//                                     ? '#d1d5db' // bg-gray-300
+//                                     : index % 2 === 0
+//                                     ? '#FFFFFF'
+//                                     : '#FAF7F0';
+
+//                                 return (
+//                                     <tr
+//                                         key={it.id}
+//                                         data-pdf-row="true"
 //                                         style={{
-//                                             ...tdPdf,
-//                                             color: isLongDuration
-//                                                 ? '#dc2626'
-//                                                 : '#000',
-//                                             fontWeight: isLongDuration
-//                                                 ? 800
-//                                                 : 500,
+//                                             background: rowBg,
+//                                             position: 'relative',
 //                                         }}
 //                                     >
-//                                         {it.agent_contact_duration != null
-//                                             ? `${it.agent_contact_duration} دقيقة`
-//                                             : '—'}
-//                                     </td>
-//                                     <td
-//                                         style={{
-//                                             ...tdPdf,
-//                                             textAlign: 'right',
-//                                             wordBreak: 'break-word',
-//                                         }}
-//                                     >
-//                                         {it.agent_contact_comment || '—'}
-//                                     </td>
-
-//                                     <td
-//                                         style={{
-//                                             ...tdPdf,
-//                                             color:
-//                                                 it.draws_no != null
+//                                         <td style={tdPdf}>{index + 1}</td>
+//                                         <td style={tdPdf}>{it.date || '—'}</td>
+//                                         <td style={tdPdf}>{it.month || '—'}</td>
+//                                         <td style={tdPdf}>{it.agent || '—'}</td>
+//                                         <td style={tdPdf}>
+//                                             {it.agent_lead_no ?? '—'}
+//                                         </td>
+//                                         <td style={tdPdf}>
+//                                             {it.lead_reassigned_no ?? '—'}
+//                                         </td>
+//                                         <td
+//                                             style={{
+//                                                 ...tdPdf,
+//                                                 color: isLongDuration
 //                                                     ? '#dc2626'
 //                                                     : '#000',
-//                                             fontWeight:
-//                                                 it.draws_no != null
+//                                                 fontWeight: isLongDuration
 //                                                     ? 800
 //                                                     : 500,
-//                                         }}
-//                                     >
-//                                         {it.draws_no ?? '—'}
-//                                     </td>
-//                                     <td
-//                                         style={{
-//                                             ...tdPdf,
-//                                             textAlign: 'right',
-//                                             wordBreak: 'break-word',
-//                                         }}
-//                                     >
-//                                         {it.draws_cause || '—'}
-//                                     </td>
-//                                 </tr>
-//                             );
-//                         })}
-//                     </tbody>
-//                     <tfoot>
-//                         <tr style={{ background: '#e6d5c0' }}>
-//                             <td
-//                                 colSpan={3}
-//                                 style={{
-//                                     ...tdFooterPdf,
-//                                     textAlign: 'right',
-//                                 }}
-//                             >
-//                                 المجموع الكلي — Gross Total
-//                             </td>
-//                             <td
-//                                 style={{
-//                                     ...tdFooterPdf,
-//                                     color: '#a47d52',
-//                                 }}
-//                             >
-//                                 {totalLeadNo}
-//                             </td>
-//                             <td
-//                                 style={{
-//                                     ...tdFooterPdf,
-//                                     color: '#a47d52',
-//                                 }}
-//                             >
-//                                 {totalReassignedLeadNo}
-//                             </td>
-//                             {/* Empty cells for: agent, contact_duration, contact_comment,
-//                                 draws_no, draws_cause */}
-//                             <td style={tdFooterPdf}></td>
-//                             <td style={tdFooterPdf}></td>
-//                             <td style={tdFooterPdf}></td>
-//                             <td style={tdFooterPdf}></td>
-//                         </tr>
-//                     </tfoot>
-//                 </table>
-//             </main>
-//         </div>
-//     )
+//                                             }}
+//                                         >
+//                                             {it.agent_contact_duration != null
+//                                                 ? `${it.agent_contact_duration} دقيقة`
+//                                                 : '—'}
+//                                         </td>
+//                                         <td
+//                                             style={{
+//                                                 ...tdPdf,
+//                                                 textAlign: 'right',
+//                                                 wordBreak: 'break-word',
+//                                             }}
+//                                         >
+//                                             {it.agent_contact_comment || '—'}
+//                                         </td>
+
+//                                         <td
+//                                             style={{
+//                                                 ...tdPdf,
+//                                                 color:
+//                                                     it.draws_no != null
+//                                                         ? '#dc2626'
+//                                                         : '#000',
+//                                                 fontWeight:
+//                                                     it.draws_no != null
+//                                                         ? 800
+//                                                         : 500,
+//                                             }}
+//                                         >
+//                                             {it.draws_no ?? '—'}
+//                                         </td>
+//                                         <td
+//                                             style={{
+//                                                 ...tdPdf,
+//                                                 textAlign: 'right',
+//                                                 wordBreak: 'break-word',
+//                                             }}
+//                                         >
+//                                             {it.draws_cause || '—'}
+//                                         </td>
+
+//                                         {/* === TRANSPARENT "Absence" OVERLAY === */}
+//                                         {absence && (
+//                                             <td
+//                                                 colSpan={10}
+//                                                 style={{
+//                                                     position: 'absolute',
+//                                                     inset: 0,
+//                                                     display: 'flex',
+//                                                     alignItems: 'flex-start',
+//                                                     justifyContent: 'center',
+//                                                     pointerEvents: 'none',
+//                                                     background: 'transparent',
+//                                                     border: 'none',
+//                                                     padding: '2px 20px 14px 20px',
+//                                                     margin: 0,
+//                                                 }}
+//                                             >
+//                                                 <span
+//                                                     style={{
+//                                                         color: '#c83c3c',
+//                                                         opacity: 0.22,
+//                                                         fontSize: '30px',
+//                                                         fontWeight: 900,
+//                                                         letterSpacing: '8px',
+//                                                         textTransform: 'uppercase',
+//                                                         fontFamily: PRINT_FONT,
+//                                                         userSelect: 'none',
+//                                                         lineHeight: 1,
+//                                                         display: 'inline-block',
+//                                                         padding: 0,
+//                                                         margin: 0,
+//                                                     }}
+//                                                 >
+//                                                     No Leads
+//                                                 </span>
+//                                             </td>
+//                                         )}
+//                                     </tr>
+//                                 );
+//                             })}
+//                         </tbody>
+//                         <tfoot>
+//                             <tr style={{ background: '#e6d5c0' }}>
+//                                 <td
+//                                     colSpan={3}
+//                                     style={{
+//                                         ...tdFooterPdf,
+//                                         textAlign: 'right',
+//                                     }}
+//                                 >
+//                                     المجموع الكلي — Gross Total
+//                                 </td>
+//                                 <td style={tdFooterPdf}></td>
+//                                 <td
+//                                     style={{
+//                                         ...tdFooterPdf,
+//                                         color: '#a47d52',
+//                                     }}
+//                                 >
+//                                     {totalAgentLeadNo}
+//                                 </td>
+//                                 <td
+//                                     style={{
+//                                         ...tdFooterPdf,
+//                                         color: '#a47d52',
+//                                     }}
+//                                 >
+//                                     {totalReassignedLeadNo}
+//                                 </td>
+//                                 <td style={tdFooterPdf}></td>
+//                                 <td style={tdFooterPdf}></td>
+//                                 <td style={tdFooterPdf}></td>
+//                                 <td style={tdFooterPdf}></td>
+//                             </tr>
+//                         </tfoot>
+//                     </table>
+//                 </main>
+//             </div>
+//         );
+//     }
 // );
 // PdfRenderTarget.displayName = 'PdfRenderTarget';
 
-// // ✅ Increased header font size + padding (unchanged)
+// // ✅ Header cell style (unchanged)
 // const thPdf = {
 //     border: '1px solid #000',
 //     padding: '10px 8px',
@@ -1120,16 +1412,16 @@ export default Monitor;
 //     whiteSpace: 'pre-line',
 // };
 
-// // ✅ Increased row font size + padding (unchanged)
+// // ✅ Body cell style — increased font size
 // const tdPdf = {
 //     border: '1px solid #ccc',
-//     padding: '10px 8px',
-//     fontSize: 12,
+//     padding: '12px 8px',
+//     fontSize: 15,
 //     color: '#000',
 //     textAlign: 'center',
 //     fontFamily: PRINT_FONT,
 //     wordBreak: 'break-word',
-//     lineHeight: 1.5,
+//     lineHeight: 1.6,
 // };
 
 // // ✅ Footer cell style (unchanged)
@@ -1478,12 +1770,34 @@ export default Monitor;
 //     };
 
 //     // ---------- Totals ----------
-//     const totalLeadNo = items.reduce((sum, it) => sum + (Number(it.lead_no) || 0), 0);
+//     const totalAgentLeadNo = items.reduce(
+//         (sum, it) => sum + (Number(it.agent_lead_no) || 0),
+//         0
+//     );
+
 //     const totalReassignedLeadNo = items.reduce(
 //         (sum, it) => sum + (Number(it.lead_reassigned_no) || 0),
 //         0
 //     );
+
 //     const printGeneratedAt = new Date().toLocaleString('ar-EG');
+
+//     // ---------- SORTED ITEMS FOR PDF ----------
+//     // 1) normal rows sorted by date ASC (oldest → newest)
+//     // 2) then sink-to-bottom rows appended at the end
+//     const sortedItemsForPdf = (() => {
+//         const normal = [];
+//         const sink = [];
+//         items.forEach((it) => {
+//             if (isSinkBottomRow(it)) sink.push(it);
+//             else normal.push(it);
+//         });
+
+//         normal.sort((a, b) => compareDateAsc(a.date, b.date));
+//         sink.sort((a, b) => compareDateAsc(a.date, b.date));
+
+//         return [...normal, ...sink];
+//     })();
 
 //     // ---------- LOADING ----------
 //     if (loading) {
@@ -1637,9 +1951,9 @@ export default Monitor;
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">#</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">التاريخ</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">الشهر</th>
+//                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">الوكيل</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">Lead No</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">Lead Reassigned No</th>
-//                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">الوكيل</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">عدد ليدات الوكيل</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">استجابة قبول الطلبات</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">ملاحظات</th>
@@ -1658,9 +1972,9 @@ export default Monitor;
 //                                             <td className="px-4 py-3 text-sm text-gray-500 font-bold">{idx + 1}</td>
 //                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.date || '—'}</td>
 //                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.month || '—'}</td>
+//                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.agent || '—'}</td>
 //                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.lead_no ?? '—'}</td>
 //                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.lead_reassigned_no ?? '—'}</td>
-//                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.agent || '—'}</td>
 //                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.agent_lead_no ?? '—'}</td>
 //                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">
 //                                                 {item.agent_contact_duration != null
@@ -1709,8 +2023,8 @@ export default Monitor;
 //             {pdfReady && (
 //                 <PdfRenderTarget
 //                     ref={renderRef}
-//                     items={items}
-//                     totalLeadNo={totalLeadNo}
+//                     items={sortedItemsForPdf}
+//                     totalAgentLeadNo={totalAgentLeadNo}
 //                     totalReassignedLeadNo={totalReassignedLeadNo}
 //                     generatedAt={printGeneratedAt}
 //                 />
