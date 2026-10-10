@@ -1,4 +1,3 @@
-// swapping the sections properly
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { saveTokens } from "../../utils/auth";
@@ -1382,6 +1381,8 @@ function Login() {
 export default Login;
 
 
+
+
 // // swapping the sections properly
 // import { useState, useRef, useEffect } from "react";
 // import { useNavigate } from "react-router-dom";
@@ -1930,7 +1931,15 @@ export default Login;
 //                                 - lg:mt-0  → resets to 0 on large screens
 //                                 - (mobile has no mt → unchanged)
 //                             ============================================= */}
-//                             <div className='flex flex-col justify-center md:flex md:flex-row md:justify-between items-center w-full gap-3 md:mt-20 lg:mt-0'>
+//                             <div className='flex flex-col justify-center md:flex md:flex-row md:justify-between items-center w-full gap-3
+//                                 /* Tablet: add top spacing */
+//                                 md:mt-20
+//                                 /* Laptop: reduce the spacing slightly */
+//                                 lg:mt-16
+//                                 /* Larger laptop/desktop: keep a smaller top offset */
+//                                 xl:mt-10
+//                                 /* Large screens: return to the original alignment */
+//                                 2xl:mt-0'>
 //                                 <div className="relative group order-2 md:order-1 md:ml-11 ">
 //                                     <img
 //                                         src={logo}
@@ -2756,3 +2765,4 @@ export default Login;
 // }
 
 // export default Login;
+

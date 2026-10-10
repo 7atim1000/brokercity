@@ -1,3 +1,4 @@
+
 // LeadsStagesGuide.jsx
 // npm install jspdf html2canvas
 
@@ -22,8 +23,8 @@ const STAGES = [
     { num: 4,  en: 'Contact Attempt', ar: 'محاولة التواصل', color: '#8fd1b0', textColor: '#0f3d3e',
       explain: 'تمت محاولة التواصل مع العميل (اتصال أو رسالة) لكن لم يتم الرد أو لم تكتمل المحادثة بعد.' },
     { num: 5,  en: 'Lead Contacted', ar: 'تم التواصل', color: '#ffe600', textColor: '#3d2f00',
-      explain: 'تم التواصل الفعلي مع العميل وتم الرد عليه، وتم التأكد من اهتمامه المبدئي .' },
-    { num: 6,  en: 'Hold Lead', ar: 'عميل مستقبلي', color: '#9c9c9c', textColor: '#ffffff',
+      explain: 'تم التواصل الفعلي مع العميل والتأكد من اهتمامه المبدئي .' },
+    { num: 6,  en: 'Hold Lead', ar: 'عميل محتمل', color: '#9c9c9c', textColor: '#ffffff',
       explain: 'العميل مهتم ولكن ليس في الوقت الحالي، تم تأجيل المتابعة معه إلى وقت لاحق.' },
     { num: 7,  en: 'Requirements Identification.', ar: 'تحديد المتطلبات', color: '#f4a26b', textColor: '#3d1f00',
       explain: 'تم تحديد متطلبات العميل بدقة ومعرفة طلبه.' },
@@ -31,16 +32,16 @@ const STAGES = [
       explain: 'تم البحث عن العقارات المتوافقة مع متطلبات العميل وترشيحها له.' },
     { num: 9,  en: 'Client Interested', ar: 'العميل مهتم', color: '#7ac943', textColor: '#1b3d00',
       explain: 'أبدى العميل اهتماماً حقيقياً بعقار أو أكثر من العقارات المُرشحة له.' },
-    { num: 10, en: 'Viewing / Meeting Scheduled', ar: 'تحديد موعد المعاينة', color: '#00b7a5', textColor: '#ffffff',
+    { num: 10, en: 'Viewing / Meeting Scheduled', ar: 'تحديد موعد معاينة / اجتماع', color: '#00b7a5', textColor: '#ffffff',
       explain: 'تم الاتفاق مع العميل على موعد محدد لمعاينة العقار أو الاجتماع مع المطور' },
-    { num: 11, en: 'Viewing / Meeting Completed', ar: 'تمت المعاينة', color: '#1aa46a', textColor: '#ffffff',
+    { num: 11, en: 'Viewing / Meeting Completed', ar: 'تمت المعاينة / الاجتماع', color: '#1aa46a', textColor: '#ffffff',
       explain: 'تمت معاينة العقار فعلياً من قِبَل العميل، ونُقلت ملاحظاته وانطباعه.' },
     { num: 12, en: 'Offer & Negotiation', ar: 'العرض والتفاوض', color: '#8d6ad6', textColor: '#ffffff',
       explain: 'تم تقديم عرض السعر للعميل وبدأت مرحلة التفاوض على الشروط والسعر.' },
     { num: 13, en: 'Collecting Documents', ar: 'جمع المستندات', color: '#8d3ba8', textColor: '#ffffff',
       explain: 'تم البدء في جمع المستندات المطلوبة من العميل (جواز السفر - الهوية - البيانات المالية وغيرها).' },
     { num: 14, en: 'Reservation Agreement (MOU / Quotation)', ar: 'اتفاقية الحجز / عرض السعر (MOU / Quotation)', color: '#2fbfa0', textColor: '#ffffff',
-      explain: 'تم توقيع اتفاقية الحجز أو إصدار عرض السعر الرسمي بين الطرفين (المشتري / البائع) (المؤجر / المشتري)' },
+      explain: 'تم توقيع اتفاقية الحجز أو إصدار عرض السعر الرسمي بين الطرفين (البائع/المشتري) (المؤجر/المستأجر)' },
     { num: 15, en: 'Continue Sale / Leasing Process', ar: 'استمرار عملية البيع / التأجير', color: '#1f6b3a', textColor: '#ffffff',
       explain: 'تم الانتقال إلى إجراءات البيع أو الإيجار الرسمية حتى الإتمام النهائي.' },
     { num: 16, en: 'Closed (Won)', ar: 'مغلق (ناجح)', color: '#c1e04a', textColor: '#2d3d00',
@@ -118,7 +119,7 @@ const PdfRenderTarget = React.forwardRef((_, ref) => (
                     lineHeight: 1.6,
                 }}
             >
-                إرشادات تحويل حالات التواصل مع العملاء
+                دليل تحويل حالات التواصل مع العملاء
             </h2>
         </header>
 

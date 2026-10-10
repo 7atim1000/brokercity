@@ -108,14 +108,11 @@ const PdfRenderTarget = forwardRef(
                             <th style={thPdf}>#</th>
                             <th style={thPdf}>التاريخ</th>
                             <th style={thPdf}>الشهر</th>
+                            <th style={thPdf}>الوكيل</th>
                             <th style={thPdf}>عدد ليدات الوكيل</th>
                             <th style={thPdf}>ليدات معاد توزيعها</th>
-                            <th style={thPdf}>الوكيل</th>
-                            <th style={thPdf}>مدة الاتصال</th>
-                            <th style={thPdf}>تعليق الوكيل</th>
-                            {/* ✅ NEW PDF COLUMNS */}
-                            <th style={thPdf}>مدة التعيين</th>
-                            <th style={thPdf}>تعليق إعادة التعيين</th>
+                            <th style={thPdf}>استجابة قبول الطلبات</th>
+                            <th style={thPdf}>ملاحظات</th>
                             <th style={thPdf}>عدد السحوبات</th>
                             <th style={thPdf}>سبب السحب</th>
                         </tr>
@@ -127,12 +124,6 @@ const PdfRenderTarget = forwardRef(
                                 it.agent_contact_duration != null &&
                                 !isNaN(durationNum) &&
                                 durationNum > 30;
-
-                            const assignedDurationNum = Number(it.agent_assigned_duration);
-                            const isLongAssignedDuration =
-                                it.agent_assigned_duration != null &&
-                                !isNaN(assignedDurationNum) &&
-                                assignedDurationNum > 30;
 
                             return (
                                 <tr
@@ -146,13 +137,13 @@ const PdfRenderTarget = forwardRef(
                                     <td style={tdPdf}>{index + 1}</td>
                                     <td style={tdPdf}>{it.date || '—'}</td>
                                     <td style={tdPdf}>{it.month || '—'}</td>
+                                    <td style={tdPdf}>{it.agent || '—'}</td>
                                     <td style={tdPdf}>
                                         {it.agent_lead_no ?? '—'}
                                     </td>
                                     <td style={tdPdf}>
                                         {it.lead_reassigned_no ?? '—'}
                                     </td>
-                                    <td style={tdPdf}>{it.agent || '—'}</td>
                                     <td
                                         style={{
                                             ...tdPdf,
@@ -176,32 +167,6 @@ const PdfRenderTarget = forwardRef(
                                         }}
                                     >
                                         {it.agent_contact_comment || '—'}
-                                    </td>
-
-                                    {/* ✅ NEW PDF CELLS */}
-                                    <td
-                                        style={{
-                                            ...tdPdf,
-                                            color: isLongAssignedDuration
-                                                ? '#dc2626'
-                                                : '#000',
-                                            fontWeight: isLongAssignedDuration
-                                                ? 800
-                                                : 500,
-                                        }}
-                                    >
-                                        {it.agent_assigned_duration != null
-                                            ? `${it.agent_assigned_duration} دقيقة`
-                                            : '—'}
-                                    </td>
-                                    <td
-                                        style={{
-                                            ...tdPdf,
-                                            textAlign: 'right',
-                                            wordBreak: 'break-word',
-                                        }}
-                                    >
-                                        {it.agent_reassigned_comment || '—'}
                                     </td>
 
                                     <td
@@ -243,6 +208,7 @@ const PdfRenderTarget = forwardRef(
                             >
                                 المجموع الكلي — Gross Total
                             </td>
+                            <td style={tdFooterPdf}></td>
                             <td
                                 style={{
                                     ...tdFooterPdf,
@@ -259,11 +225,8 @@ const PdfRenderTarget = forwardRef(
                             >
                                 {totalReassignedLeadNo}
                             </td>
-                            {/* Empty cells for: agent, contact_duration, contact_comment,
-                                assigned_duration, reassigned_comment, draws_no, draws_cause */}
-                            <td style={tdFooterPdf}></td>
-                            <td style={tdFooterPdf}></td>
-                            <td style={tdFooterPdf}></td>
+                            {/* Empty cells for: contact_duration, contact_comment,
+                                draws_no, draws_cause */}
                             <td style={tdFooterPdf}></td>
                             <td style={tdFooterPdf}></td>
                             <td style={tdFooterPdf}></td>
@@ -807,15 +770,12 @@ const Monitor = () => {
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">#</th>
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">التاريخ</th>
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">الشهر</th>
+                                        <th className="px-4 py-3 text-sm font-extrabold text-gray-700">الوكيل</th>
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">Lead No</th>
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">Lead Reassigned No</th>
-                                        <th className="px-4 py-3 text-sm font-extrabold text-gray-700">الوكيل</th>
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">عدد ليدات الوكيل</th>
-                                        <th className="px-4 py-3 text-sm font-extrabold text-gray-700">مدة الاتصال</th>
-                                        <th className="px-4 py-3 text-sm font-extrabold text-gray-700">تعليق الوكيل</th>
-                                        {/* ✅ NEW COLUMNS */}
-                                        <th className="px-4 py-3 text-sm font-extrabold text-gray-700">مدة التعيين</th>
-                                        <th className="px-4 py-3 text-sm font-extrabold text-gray-700">تعليق إعادة التعيين</th>
+                                        <th className="px-4 py-3 text-sm font-extrabold text-gray-700">استجابة قبول الطلبات</th>
+                                        <th className="px-4 py-3 text-sm font-extrabold text-gray-700">ملاحظات</th>
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">سحوبات</th>
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">عدد السحوبات</th>
                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">سبب السحب</th>
@@ -831,9 +791,9 @@ const Monitor = () => {
                                             <td className="px-4 py-3 text-sm text-gray-500 font-bold">{idx + 1}</td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.date || '—'}</td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.month || '—'}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.agent || '—'}</td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.lead_no ?? '—'}</td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.lead_reassigned_no ?? '—'}</td>
-                                            <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.agent || '—'}</td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.agent_lead_no ?? '—'}</td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">
                                                 {item.agent_contact_duration != null
@@ -842,15 +802,6 @@ const Monitor = () => {
                                             </td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold max-w-[220px] truncate">
                                                 {item.agent_contact_comment || '—'}
-                                            </td>
-                                            {/* ✅ NEW CELLS */}
-                                            <td className="px-4 py-3 text-sm text-gray-800 font-semibold">
-                                                {item.agent_assigned_duration != null
-                                                    ? `${item.agent_assigned_duration} دقيقة`
-                                                    : '—'}
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-gray-800 font-semibold max-w-[220px] truncate">
-                                                {item.agent_reassigned_comment || '—'}
                                             </td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.draws ?? '—'}</td>
                                             <td className="px-4 py-3 text-sm text-gray-800 font-semibold">{item.draws_no ?? '—'}</td>
@@ -912,6 +863,8 @@ const Monitor = () => {
 };
 
 export default Monitor;
+
+
 
 // import React, { useState, useEffect, useRef, forwardRef } from 'react';
 // import { toast } from 'react-toastify';
@@ -1026,8 +979,8 @@ export default Monitor;
 //                             <th style={thPdf}>عدد ليدات الوكيل</th>
 //                             <th style={thPdf}>ليدات معاد توزيعها</th>
 //                             <th style={thPdf}>الوكيل</th>
-//                             <th style={thPdf}>مدة الاتصال</th>
-//                             <th style={thPdf}>تعليق الوكيل</th>
+//                             <th style={thPdf}>استجابة قبول الطلبات</th>
+//                             <th style={thPdf}>ملاحظات</th>
 //                             <th style={thPdf}>عدد السحوبات</th>
 //                             <th style={thPdf}>سبب السحب</th>
 //                         </tr>
@@ -1083,6 +1036,7 @@ export default Monitor;
 //                                     >
 //                                         {it.agent_contact_comment || '—'}
 //                                     </td>
+
 //                                     <td
 //                                         style={{
 //                                             ...tdPdf,
@@ -1138,7 +1092,8 @@ export default Monitor;
 //                             >
 //                                 {totalReassignedLeadNo}
 //                             </td>
-//                             <td style={tdFooterPdf}></td>
+//                             {/* Empty cells for: agent, contact_duration, contact_comment,
+//                                 draws_no, draws_cause */}
 //                             <td style={tdFooterPdf}></td>
 //                             <td style={tdFooterPdf}></td>
 //                             <td style={tdFooterPdf}></td>
@@ -1152,7 +1107,7 @@ export default Monitor;
 // );
 // PdfRenderTarget.displayName = 'PdfRenderTarget';
 
-// // ✅ Increased header font size + padding
+// // ✅ Increased header font size + padding (unchanged)
 // const thPdf = {
 //     border: '1px solid #000',
 //     padding: '10px 8px',
@@ -1165,7 +1120,7 @@ export default Monitor;
 //     whiteSpace: 'pre-line',
 // };
 
-// // ✅ Increased row font size + padding
+// // ✅ Increased row font size + padding (unchanged)
 // const tdPdf = {
 //     border: '1px solid #ccc',
 //     padding: '10px 8px',
@@ -1177,7 +1132,7 @@ export default Monitor;
 //     lineHeight: 1.5,
 // };
 
-// // ✅ New: dedicated footer cell style — bigger font + more padding
+// // ✅ Footer cell style (unchanged)
 // const tdFooterPdf = {
 //     border: '1px solid #ccc',
 //     padding: '14px 10px',
@@ -1341,7 +1296,7 @@ export default Monitor;
 //     };
 
 //     // =========================================================
-//     //  PDF DOWNLOAD
+//     //  PDF DOWNLOAD (logic unchanged)
 //     // =========================================================
 //     const handleDownloadPDF = async () => {
 //         if (!items || items.length === 0) {
@@ -1356,9 +1311,6 @@ export default Monitor;
 //         try {
 //             const node = renderRef.current;
 
-//             // -------------------------------------------------
-//             // 1) Measure row positions relative to root node
-//             // -------------------------------------------------
 //             const rootRect = node.getBoundingClientRect();
 //             const rowEls = node.querySelectorAll('[data-pdf-row="true"]');
 
@@ -1370,9 +1322,6 @@ export default Monitor;
 //                 };
 //             });
 
-//             // -------------------------------------------------
-//             // 2) Rasterize the full HTML block ONCE
-//             // -------------------------------------------------
 //             const scale = 2.5;
 //             const canvas = await html2canvas(node, {
 //                 scale,
@@ -1383,9 +1332,6 @@ export default Monitor;
 //                 windowHeight: node.scrollHeight,
 //             });
 
-//             // -------------------------------------------------
-//             // 3) jsPDF A4 landscape
-//             // -------------------------------------------------
 //             const doc = new jsPDF({
 //                 orientation: 'landscape',
 //                 unit: 'mm',
@@ -1393,8 +1339,8 @@ export default Monitor;
 //                 compress: true,
 //             });
 
-//             const pageW = doc.internal.pageSize.getWidth();   // 297mm
-//             const pageH = doc.internal.pageSize.getHeight();  // 210mm
+//             const pageW = doc.internal.pageSize.getWidth();
+//             const pageH = doc.internal.pageSize.getHeight();
 
 //             const FOOTER_RESERVED_MM = 10;
 //             const usablePageH = pageH - FOOTER_RESERVED_MM;
@@ -1402,9 +1348,6 @@ export default Monitor;
 //             const pxToMm = pageW / canvas.width;
 //             const usablePagePx = usablePageH / pxToMm;
 
-//             // -------------------------------------------------
-//             // 4) Candidate break points = tops of each row + end
-//             // -------------------------------------------------
 //             const candidateBreaks = cssRowRects.map(
 //                 (r) => r.top * scale
 //             );
@@ -1447,9 +1390,6 @@ export default Monitor;
 //                 .filter((v) => v > 0)
 //                 .sort((a, b) => a - b);
 
-//             // -------------------------------------------------
-//             // 5) Slice the canvas into per-page canvases
-//             // -------------------------------------------------
 //             let prevY = 0;
 //             const pageCanvases = [];
 
@@ -1479,9 +1419,6 @@ export default Monitor;
 //                 prevY = breakY;
 //             }
 
-//             // -------------------------------------------------
-//             // 6) Place each slice into a page
-//             // -------------------------------------------------
 //             const totalPages = pageCanvases.length;
 
 //             for (let page = 0; page < totalPages; page++) {
@@ -1503,7 +1440,6 @@ export default Monitor;
 //                     'FAST'
 //                 );
 
-//                 // ---- Page footer ----
 //                 const footerY = pageH - 5;
 //                 doc.setDrawColor(220, 220, 220);
 //                 doc.setLineWidth(0.3);
@@ -1530,9 +1466,6 @@ export default Monitor;
 //                 );
 //             }
 
-//             // -------------------------------------------------
-//             // 7) Save
-//             // -------------------------------------------------
 //             doc.save(`Monitor_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
 //             toast.success('✅ تم تحميل ملف PDF');
 //         } catch (err) {
@@ -1708,8 +1641,8 @@ export default Monitor;
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">Lead Reassigned No</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">الوكيل</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">عدد ليدات الوكيل</th>
-//                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">مدة الاتصال</th>
-//                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">تعليق الوكيل</th>
+//                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">استجابة قبول الطلبات</th>
+//                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">ملاحظات</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">سحوبات</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">عدد السحوبات</th>
 //                                         <th className="px-4 py-3 text-sm font-extrabold text-gray-700">سبب السحب</th>
@@ -1797,5 +1730,3 @@ export default Monitor;
 // };
 
 // export default Monitor;
-
-

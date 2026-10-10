@@ -1383,6 +1383,8 @@ function Login() {
 
 export default Login;
 
+
+
 // // swapping the sections properly
 // import { useState, useRef, useEffect } from "react";
 // import { useNavigate } from "react-router-dom";
@@ -1924,8 +1926,15 @@ export default Login;
 
 //                         {/* Logo Section */}
 //                         <div className="flex flex-col items-center justify-center mb-5 md:mb-6 relative flex-shrink-0">
-                           
-//                             <div className='flex flex-col justify-center md:flex md:flex-row md:justify-between items-center w-full gap-3 md:mt-20 lg:mt-0'>
+//                             <div className='flex flex-col justify-center md:flex md:flex-row md:justify-between items-center w-full gap-3
+//                                 /* Tablet: add top spacing */
+//                                 md:mt-20
+//                                 /* Laptop: reduce the spacing slightly */
+//                                 lg:mt-16
+//                                 /* Larger laptop/desktop: keep a smaller top offset */
+//                                 xl:mt-10
+//                                 /* Large screens: return to the original alignment */
+//                                 2xl:mt-0'>
 //                                 <div className="relative group order-2 md:order-2">
 //                                     <img
 //                                         src={logo}
@@ -2105,6 +2114,7 @@ export default Login;
 //                                                 const Icon = role.icon;
 
 //                                                 return (
+                                                    
 //                                                     <button
 //                                                         key={key}
 //                                                         type="button"

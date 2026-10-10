@@ -12,6 +12,8 @@ const AGENTS = [
     'Sultan',
     'Mohammed Sabri',
     'Mohammed Elmusa',
+    'Ebraheem Elbtal',
+    'Mohammed Saleem',
     'Rana Ahmed',
     'Wala',
     'Nora',
